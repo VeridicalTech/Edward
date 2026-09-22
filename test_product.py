@@ -405,5 +405,32 @@ class TestVerifyCLIPath(unittest.TestCase):
             self.assertTrue(r["ok"], r["errors"])
 
 
+class TestNoUnresolvedAnnotations(unittest.TestCase):
+    """3.11 evaluates function annotations at def time; a cross-module class
+    used in an annotation but not imported is a hard NameError on import.
+    This bit us twice — keep it guarded."""
+
+    def test_all_annotations_resolve(self):
+        import ast
+        issues = []
+        for f in Path(__file__).parent.joinpath("edward").glob("*.py"):
+            tree = ast.parse(f.read_text())
+            imported = set()
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.Import, ast.ImportFrom)):
+                    for a in node.names:
+                        imported.add(a.asname or a.name.split(".")[0])
+            local = {n.name for n in ast.walk(tree)
+                     if isinstance(n, (ast.ClassDef, ast.FunctionDef))}
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    for a in node.args.args + node.args.kwonlyargs + node.args.posonlyargs:
+                        if a.annotation and isinstance(a.annotation, ast.Name):
+                            name = a.annotation.id
+                            if name[0].isupper() and name not in imported and name not in local:
+                                issues.append(f"{f.name}:{node.lineno} {name}")
+        self.assertEqual(issues, [])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
