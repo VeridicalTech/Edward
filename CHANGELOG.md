@@ -11,6 +11,20 @@ All notable changes to Edward are documented here. Format follows
   holdout: recall 57.4%→58.3%, FPR 20.4%→17.6%, precision 72.9%→76.8%.
   Probe styles v1c/v2a–v2d available for study; see BENCHMARK.md.
 
+## [0.2.0] - 2026-09-22
+
+### Added
+- **Signed evidence receipts**: every audit record is Ed25519-signed into a
+  hash chain (`edward/receipts.py`, pure stdlib, verified against RFC 8032
+  test vectors); `edward keygen` and `edward verify` for offline tamper
+  checks. Matching is by record hash — rotation-safe.
+- **Human approval loop**: `edward wrap --wait-approval N` sends Resume/Kill
+  decision links (Slack incoming webhook or stderr) and waits; PAUSE becomes
+  an interactive decision with session pinning intact.
+- Terminal demo GIFs (real transcripts) rendered via
+  `tools/make_cast.py` + agg; embedded in README / README.zh-CN.md.
+- Chinese README (`README.zh-CN.md`).
+
 ## [0.1.1] - 2026-09-22
 
 ### Added

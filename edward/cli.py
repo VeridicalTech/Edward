@@ -21,11 +21,13 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
+from .approval import ApprovalServer
 from .audit import AuditLog, summarize
-from .config import Policy, load_policy, policy_toml
+from .config import load_policy, policy_toml
 from .engine import RESUMABLE_ACTIONS, ControlPlane
 from .notify import notify_stderr
 from .pi_client import PiRpcClient
+from .receipts import ReceiptChain, ensure_key, verify_chain
 from .scorer import Scorer
 
 EXIT_OK = 0
@@ -127,6 +129,25 @@ class Killer:
                     pass
 
 
+def _request_approval(policy: Policy, session: str) -> str:
+    """Send decision links to Slack and wait for the human verdict."""
+    from .notify import notify_webhook
+    server = ApprovalServer(port=policy.approval_port,
+                            host=policy.approval_host,
+                            timeout_seconds=policy.wait_approval_seconds)
+    urls = server.urls()
+    text = (f"[edward] PAUSED — session edward-{session}\n"
+            f"Approve resume: {urls['resume']}\nKill agent: {urls['kill']}\n"
+            f"(links valid {policy.wait_approval_seconds}s)")
+    if policy.webhook_url:
+        notify_webhook(policy.webhook_url, text)
+    notify_stderr("PAUSED — awaiting human decision",
+                  f"open the approval links (valid {policy.wait_approval_seconds}s), "
+                  f"or wait to stay paused")
+    server.start()
+    return server.wait()
+
+
 def cmd_wrap(args, cmd) -> int:
     if not cmd:
         print("wrap requires a command after '--': edward wrap -- <agent command>", file=sys.stderr)
@@ -143,6 +164,8 @@ def cmd_wrap(args, cmd) -> int:
         policy.webhook_url = args.webhook
     if args.auto_resume is not None:
         policy.auto_resume_seconds = args.auto_resume
+    if args.wait_approval is not None:
+        policy.wait_approval_seconds = args.wait_approval
     session_id = uuid.uuid4().hex[:8]
     if args.continue_session or args.session:
         sid = args.session or _last_paused_session(args.audit or DEFAULT_AUDIT_PATH)
@@ -153,7 +176,16 @@ def cmd_wrap(args, cmd) -> int:
         session_id = sid
         log_line(f"resuming session edward-{session_id}")
 
-    audit = AuditLog(None if args.no_audit else (args.audit or DEFAULT_AUDIT_PATH))
+    audit_path = None if args.no_audit else (args.audit or DEFAULT_AUDIT_PATH)
+    receipts = None
+    if audit_path and not getattr(args, "no_receipts", False):
+        try:
+            seed, pub = ensure_key(os.path.join(os.path.dirname(audit_path), "signing_key"))
+            receipts_path = Path(audit_path).parent / "receipts.jsonl"
+            receipts = ReceiptChain(receipts_path, seed, pub)
+        except (OSError, ValueError) as exc:
+            log_line(f"receipts disabled: {exc}")
+    audit = AuditLog(audit_path, receipts=receipts)
     ephemeral = bool(args.ephemeral)
     scorer = None
     if policy.scorer_enabled:
@@ -175,6 +207,20 @@ def cmd_wrap(args, cmd) -> int:
                                        ephemeral=ephemeral)
         outcome = _run_under_control(run_cmd, policy, scorer, audit, session_id,
                                      max_seconds=args.max_seconds, is_pi=_is_pi_rpc(run_cmd))
+        if outcome == EXIT_PAUSED and policy.wait_approval_seconds > 0 \
+                and resumes < MAX_RESUMES and _is_pi_rpc(current_cmd):
+            decision = _request_approval(policy, session_id)
+            if decision == "resume":
+                resumes += 1
+                log_line(f"approved via approval links — resuming "
+                         f"(attempt {resumes}/{MAX_RESUMES}, session edward-{session_id})")
+                continue
+            if decision == "kill":
+                log_line("killed via approval links")
+                outcome = EXIT_TERMINATED
+                break
+            log_line("approval timeout — staying paused (exit 75)")
+            break
         if outcome == EXIT_PAUSED and policy.auto_resume_seconds > 0 \
                 and resumes < MAX_RESUMES and _is_pi_rpc(current_cmd):
             resumes += 1
@@ -544,6 +590,29 @@ def cmd_policy_template(args) -> int:
     return EXIT_OK
 
 
+def cmd_keygen(args) -> int:
+    try:
+        seed, pub = ensure_key(args.key)
+    except (OSError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_ERROR
+    print(f"signing key: {args.key}")
+    print(f"public key:  {pub}")
+    print("publish this public key; anyone can verify receipts offline with `edward verify`")
+    return EXIT_OK
+
+
+def cmd_verify(args) -> int:
+    result = verify_chain(args.audit, args.receipts)
+    status = "VALID" if result["ok"] else "TAMPERED / INCOMPLETE"
+    print(f"audit:    {args.audit} ({result['records']} records)")
+    print(f"receipts: {args.receipts} ({result['receipts']} receipts)")
+    print(f"verdict:  {status}")
+    for err in result["errors"][:10]:
+        print(f"  - {err}")
+    return EXIT_OK if result["ok"] else EXIT_ERROR
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="edward",
@@ -566,6 +635,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_wrap.add_argument("--no-scorer", action="store_true", help="rule-only mode")
     p_wrap.add_argument("--max-seconds", type=int, help="wall-clock cap for the run")
     p_wrap.add_argument("--auto-resume", type=int, metavar="SECONDS", help="auto-resume paused pi sessions after N seconds (max 5 resumes)")
+    p_wrap.add_argument("--wait-approval", type=int, metavar="SECONDS",
+                        help="on PAUSE: send decision links (Slack) and wait up to N seconds for resume/kill")
+    p_wrap.add_argument("--no-receipts", action="store_true", help="disable signed receipts")
     p_wrap.add_argument("--continue", dest="continue_session", action="store_true", help="resume the most recently paused session (session id recovered from audit)")
     p_wrap.add_argument("--session", metavar="ID", help="explicit edward session id to resume (with --continue)")
     p_wrap.add_argument("--ephemeral", action="store_true", help="do not persist a resumable pi session (no pause/resume)")
@@ -603,6 +675,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_tpl = sub.add_parser("policy-template", help="print a TOML policy template")
     p_tpl.add_argument("--preset", default="balanced", choices=["conservative", "balanced", "aggressive"])
 
+    p_key = sub.add_parser("keygen", help="create the receipt signing key and print the public key")
+    p_key.add_argument("--key", default=os.path.join(os.path.dirname(DEFAULT_AUDIT_PATH), "signing_key"))
+
+    p_verify = sub.add_parser("verify", help="offline verification of audit receipts")
+    p_verify.add_argument("audit", nargs="?", default=DEFAULT_AUDIT_PATH)
+    p_verify.add_argument("receipts", nargs="?",
+                          default=str(Path(DEFAULT_AUDIT_PATH).parent / "receipts.jsonl"))
+
     return parser
 
 
@@ -628,6 +708,10 @@ def main(argv=None) -> int:
         return cmd_doctor(args)
     if args.command == "policy-template":
         return cmd_policy_template(args)
+    if args.command == "keygen":
+        return cmd_keygen(args)
+    if args.command == "verify":
+        return cmd_verify(args)
     parser.print_help()
     return EXIT_ERROR
 

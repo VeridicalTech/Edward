@@ -14,6 +14,11 @@
 
 </div>
 
+<div align="center">
+<img src="docs/gif/intervention.gif" alt="Edward live intervention: passive stall detected, agent cancelled at 3,589 tokens" width="780">
+<br><em>Live run: a looping agent is stopped mid-flight — decision signed, audited, resumable.</em>
+</div>
+
 ---
 
 Agents fail quietly. They retry the same broken test 40 times, burn $8 in tokens on a loop, run `rm -rf` on a database directory, and write to files they were never supposed to touch. The agent doesn't know it's failing — from its perspective, it's still trying.
@@ -111,6 +116,18 @@ from the audit log. CANCEL / BLOCK exit 76. Audit lands in
 any local OpenAI-compatible scoring endpoint (a 4B model on your GPU box is
 plenty — see [deploy/](deploy/) for the team-LAN topology). Scorer down?
 Edward logs a warning and runs rule-only. It stays protective.
+
+**v0.2.0 highlights**
+
+- **Signed evidence receipts** — every audit record is Ed25519-signed into a
+  hash chain (pure stdlib, RFC 8032 vectors); `edward verify` proves
+  tamper-evidence offline. Publish your public key; anyone can check.
+- **Human approval loop** — `--wait-approval 300` sends Resume/Kill links to
+  Slack (or stderr) and waits; PAUSE becomes a decision, not a dead end.
+
+<div align="center">
+<img src="docs/gif/resume_verify.gif" alt="resume from audit + offline receipt verification" width="780">
+</div>
 
 ## Why zero dependencies?
 

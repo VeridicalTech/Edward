@@ -55,12 +55,20 @@ KNOWN_TOP_KEYS = {
     "preset", "token_budget", "token_price_usd_per_1m", "allowed_paths",
     "session_dir", "triggers", "scorer", "notify", "intervention",
 }
+KNOWN_TOP_KEYS = {
+    "preset", "token_budget", "token_price_usd_per_1m", "allowed_paths",
+    "session_dir", "triggers", "scorer", "notify", "intervention", "receipts",
+}
 KNOWN_NESTED = {
     "scorer": {"base_url": "scorer_base_url", "enabled": "scorer_enabled",
                "timeout_seconds": "scorer_timeout_seconds"},
     "notify": {"webhook_url": "webhook_url", "stderr_banner": "stderr_banner"},
     "intervention": {"cooldown_seconds": "cooldown_seconds",
-                     "auto_resume_seconds": "auto_resume_seconds"},
+                     "auto_resume_seconds": "auto_resume_seconds",
+                     "wait_approval_seconds": "wait_approval_seconds",
+                     "approval_host": "approval_host",
+                     "approval_port": "approval_port"},
+    "receipts": {"enabled": "receipts_enabled"},
 }
 
 
@@ -83,6 +91,11 @@ class Policy:
     stderr_banner: bool = True
     cooldown_seconds: float = 10.0
     auto_resume_seconds: int = 0
+    wait_approval_seconds: int = 0
+    approval_host: str = "127.0.0.1"
+    approval_port: int = 8765
+    receipts_enabled: bool = True
+    wait_approval_seconds: int = 0
 
 
 def _warn(msg: str) -> None:

@@ -20,6 +20,7 @@ from edward.config import PolicyError, TRIGGER_DEFAULTS, load_policy, policy_tom
 from edward.engine import ControlPlane
 from edward.cli import (_extract_pi_prompt, _last_paused_session, _split_cmd,
                             build_pi_command, EXIT_PAUSED, EXIT_TERMINATED)
+from edward.approval import ApprovalServer
 from edward.scorer import Scorer
 from edward.triggers import check_triggers
 from edward.state_engine import StateEngine
@@ -353,6 +354,55 @@ class TestScenarios(unittest.TestCase):
                     self.assertFalse(t.triggered, f"{scenario} #{i} should be clean")
                 else:
                     self.assertTrue(t.triggered, f"{scenario} #{i} should fire")
+
+
+
+
+class TestApprovalServer(unittest.TestCase):
+    def test_decision_flow(self):
+        import urllib.request
+        srv = ApprovalServer(port=0, timeout_seconds=5)
+        # bind port 0: patch to pick free port
+        import http.server
+        srv.start()
+        port = srv._server.server_address[1]
+        urls = srv.urls()
+        urls = {k: v.replace(f":{srv.port}/", f":{port}/") for k, v in urls.items()}
+        self.assertIsNone(srv.decision)
+        with urllib.request.urlopen(urls["kill"], timeout=5) as r:
+            self.assertIn(b"terminated", r.read())
+        self.assertEqual(srv.decision, "kill")
+        srv.stop()
+
+    def test_bad_token_rejected(self):
+        import urllib.request, urllib.error
+        srv = ApprovalServer(port=0, timeout_seconds=5)
+        srv.start()
+        port = srv._server.server_address[1]
+        try:
+            urllib.request.urlopen(f"http://127.0.0.1:{port}/resume?token=wrong", timeout=5)
+            self.fail("expected 403")
+        except urllib.error.HTTPError as e:
+            self.assertEqual(e.code, 403)
+        srv.stop()
+        self.assertIsNone(srv.decision)
+
+
+class TestVerifyCLIPath(unittest.TestCase):
+    def test_end_to_end_verify(self):
+        from edward.receipts import ReceiptChain, ensure_key, verify_chain
+        from edward.audit import AuditLog
+        with tempfile.TemporaryDirectory() as td:
+            seed, pub = ensure_key(os.path.join(td, "signing_key"))
+            audit, receipts = os.path.join(td, "audit.jsonl"), os.path.join(td, "receipts.jsonl")
+            chain = ReceiptChain(receipts, seed, pub)
+            log = AuditLog(audit, receipts=chain)
+            log.session_start("s1", "balanced", ["pi", "t"])
+            log.intervention("s1", "stall", "should_continue", "PAUSE", "rule",
+                             "soft_decision", {"token_usage": 10}, est_avoided_usd=0.6)
+            log.session_end("s1", "exit 75", 75)
+            r = verify_chain(audit, receipts)
+            self.assertTrue(r["ok"], r["errors"])
 
 
 if __name__ == "__main__":

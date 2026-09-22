@@ -17,8 +17,9 @@ SCHEMA_VERSION = 1
 
 
 class AuditLog:
-    def __init__(self, path=None):
+    def __init__(self, path=None, receipts=None):
         self.path = Path(path) if path else None
+        self.receipts = receipts
         self._degraded = False
         if self.path:
             try:
@@ -51,6 +52,12 @@ class AuditLog:
         except OSError as exc:
             self._degrade(f"{exc}")
             print(f"[edward] audit: {line}", file=sys.stderr)
+            return
+        if self.receipts is not None:
+            try:
+                self.receipts.append(record)
+            except OSError as exc:
+                self._degrade(f"receipt chain: {exc}")
 
     def session_start(self, session: str, policy_preset: str, command) -> None:
         self.emit("session_start", session=session, policy_preset=policy_preset,
