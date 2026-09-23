@@ -19,7 +19,7 @@ from edward.audit import AuditLog, summarize
 from edward.config import PolicyError, TRIGGER_DEFAULTS, load_policy, policy_toml
 from edward.engine import ControlPlane
 from edward.cli import (_extract_pi_prompt, _last_paused_session, _split_cmd,
-                            build_pi_command, EXIT_PAUSED, EXIT_TERMINATED)
+                            build_pi_command, cmd_audit, EXIT_PAUSED, EXIT_TERMINATED)
 from edward.approval import ApprovalServer
 from edward.scorer import Scorer
 from edward.triggers import check_triggers
@@ -165,6 +165,29 @@ class TestAudit(unittest.TestCase):
             log = AuditLog(os.path.join(blocker, "audit.jsonl"))
             log.emit("intervention", session="s", action="PAUSE")  # must not raise
             self.assertTrue(log._degraded)
+
+    def test_audit_json_flag(self):  
+        import io
+        from contextlib import redirect_stdout
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "audit.jsonl")
+            log = AuditLog(path)
+            log.session_start("s1", "balanced", ["pi", "task"])
+            log.intervention("s1", "loop", "should_continue", "PAUSE", "rule",
+                             "soft_decision", {"token_usage": 900, "cost_usd": 0.02})
+            log.session_end("s1", "exit 75", 75)
+
+            args = SimpleNamespace(file=path, tail=None, json=True)
+            f = io.StringIO()
+            with redirect_stdout(f):
+                ret = cmd_audit(args)
+
+            self.assertEqual(ret, 0)
+            output = json.loads(f.getvalue())
+            self.assertIn("interventions", output)
+            self.assertEqual(output["interventions"], 1)
+            self.assertEqual(output["sessions"], 1)
 
 
 class FakeBreakerClient:

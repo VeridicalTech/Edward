@@ -530,6 +530,9 @@ def cmd_audit(args) -> int:
             return EXIT_ERROR
         return EXIT_OK
     s = summarize(path)
+    if args.json:
+        print(json.dumps(s))
+        return EXIT_OK
     print(f"file: {s['file']}")
     print(f"sessions: {s['sessions']}   interventions: {s['interventions']}")
     if s["interventions"]:
@@ -670,6 +673,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_audit = sub.add_parser("audit", help="inspect audit log")
     p_audit.add_argument("file", nargs="?", help=f"audit JSONL path (default {DEFAULT_AUDIT_PATH})")
     p_audit.add_argument("--tail", type=int, metavar="N", help="show last N records")
+    p_audit.add_argument("--json", action="store_true", help="Output audit results as JSON")
 
     p_doc = sub.add_parser("doctor", help="environment checks")
     add_common(p_doc)
