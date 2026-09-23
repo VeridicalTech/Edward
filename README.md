@@ -4,14 +4,16 @@
 
 **An external control plane for AI coding agents — deterministic guardrails, a local semantic scorer, and interventions you can resume.**
 
-[![CI](https://img.shields.io/github/actions/workflow/status/VeridicalTech/Edward/ci.yml?branch=main&label=CI&logo=github)](https://github.com/VeridicalTech/Edward/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/pypi/v/edward-guard?color=blue)](https://pypi.org/project/edward-guard/)
-[![downloads](https://img.shields.io/pypi/dw/edward-guard)](https://pypi.org/project/edward-guard/)
-[![python](https://img.shields.io/badge/python-3.11%2B-blue)](pyproject.toml)
-[![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![deps](https://img.shields.io/badge/runtime%20deps-0-brightgreen)](#why-zero-dependencies)
-[![benchmark](https://img.shields.io/badge/StepShield-EIR%E2%82%83_0.778-8A2BE2)](BENCHMARK.md)
-[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](CONTRIBUTING.md)
+[![CI](https://img.shields.io/github/actions/workflow/status/VeridicalTech/Edward/ci.yml?branch=main&label=CI&style=flat-square&logo=github)](https://github.com/VeridicalTech/Edward/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/edward-guard?style=flat-square&color=blue)](https://pypi.org/project/edward-guard/)
+[![downloads](https://img.shields.io/pypi/dw/edward-guard?style=flat-square)](https://pypi.org/project/edward-guard/)
+[![python](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square)](pyproject.toml)
+[![license](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
+[![deps](https://img.shields.io/badge/runtime%20deps-0-brightgreen?style=flat-square)](#why-zero-dependencies)
+[![benchmark](https://img.shields.io/badge/StepShield-EIR%E2%82%83_0.778-8A2BE2?style=flat-square)](BENCHMARK.md)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](CONTRIBUTING.md)
+
+[PyPI](https://pypi.org/project/edward-guard/) · [Benchmark](BENCHMARK.md) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
 
 *Agents fail quietly. Edward notices.*
 
@@ -109,6 +111,26 @@ edward wrap -- pi "fix the flaky test"                     # full monitoring + i
 edward wrap --no-scorer -- python my_agent.py              # any command, rule-only
 edward wrap --scope ./src --auto-resume 60 -- pi "task"    # scoped writes, auto-resume
 ```
+
+```console
+$ edward demo
+policy: balanced  trials/scenario: 3
+
+scenario             expect     result        latency
+-----------------------------------------------------
+normal               no-fire    clean               —  ok
+transient_failure    no-fire    clean               —  ok
+infinite_loop        fire       100% detected      8.0  ok
+budget_bleed         fire       100% detected     12.0  ok
+dangerous            fire       100% detected      4.7  ok
+stall                fire       100% detected      4.0  ok
+
+PASS in 0.0s (deterministic rules frozen defaults; scorer off)
+```
+
+Real output, not a mock — six failure scenarios against the frozen rule set,
+plus the two clean controls. Wraps **any subprocess**: Pi, Codex, `claude -p`,
+CI jobs, plain scripts.
 
 Interventions are **resumable, not fatal**: PAUSE exits with code 75, pins the
 agent session, and `edward wrap --continue` picks the same session back up
