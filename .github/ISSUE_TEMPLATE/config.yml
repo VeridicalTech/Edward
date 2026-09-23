@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Contributing guide
+    url: https://github.com/VeridicalTech/Edward/blob/main/CONTRIBUTING.md
+    about: Read this before opening a pull request — offline-only tests, commit conventions.
+  - name: Measurements and benchmark
+    url: https://github.com/VeridicalTech/Edward/blob/main/BENCHMARK.md
+    about: How Edward's intervention quality is measured before you propose a new metric.

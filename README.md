@@ -6,9 +6,12 @@
 
 [![CI](https://img.shields.io/github/actions/workflow/status/VeridicalTech/Edward/ci.yml?branch=main&label=CI&logo=github)](https://github.com/VeridicalTech/Edward/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/edward-guard?color=blue)](https://pypi.org/project/edward-guard/)
+[![downloads](https://img.shields.io/pypi/dw/edward-guard)](https://pypi.org/project/edward-guard/)
 [![python](https://img.shields.io/badge/python-3.11%2B-blue)](pyproject.toml)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![deps](https://img.shields.io/badge/runtime%20deps-0-brightgreen)](#why-zero-dependencies)
+[![benchmark](https://img.shields.io/badge/StepShield-EIR%E2%82%83_0.778-8A2BE2)](BENCHMARK.md)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](CONTRIBUTING.md)
 
 *Agents fail quietly. Edward notices.*
 

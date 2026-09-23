@@ -1,0 +1,46 @@
+name: Feature request
+description: Suggest an idea or capability for Edward
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have a use case Edward doesn't cover yet? Tell us the problem, not
+        just the solution — the problem often suggests a better mechanism.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What are you trying to do, and what gets in the way today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like to happen? CLI shape, policy format, receipt fields — be concrete.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds you've tried, or other tools that solve part of this.
+    validations:
+      required: false
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Audit logs, benchmark numbers, or sketches that support the request.
+    validations:
+      required: false
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and found no duplicate
+          required: true
+        - label: I agree to follow this project's Code of Conduct
+          required: true

@@ -1,0 +1,64 @@
+name: Bug report
+description: Something in Edward is broken or behaves unexpectedly
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug.
+        Please search [existing issues](https://github.com/VeridicalTech/Edward/issues?q=is%3Aissue) first.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Observed vs. expected behavior, with minimal steps to reproduce.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Edward version
+      description: Output of `edward --version`, or the commit hash if running from source.
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Linux
+        - macOS
+        - Windows
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Wrapped agent
+      description: Which coding agent was Edward watching?
+      options:
+        - Pi
+        - Codex
+        - Other
+        - Not applicable
+    validations:
+      required: false
+  - type: textarea
+    id: audit-evidence
+    attributes:
+      label: Audit evidence
+      description: |
+        `edward audit --json` output for the affected session, if available.
+        Redact anything sensitive before pasting.
+    validations:
+      required: false
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and found no duplicate
+          required: true
+        - label: I agree to follow this project's Code of Conduct
+          required: true
