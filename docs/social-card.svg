@@ -9,7 +9,7 @@
   <text x="640" y="76" font-size="22" fill="#8b949e" text-anchor="middle">edward — live session</text>
   <!-- wordmark -->
   <text x="100" y="204" font-size="108" font-weight="bold" fill="#e6edf3">Edward<tspan fill="#3fb950">_</tspan></text>
-  <text x="104" y="262" font-size="32" fill="#8b949e">An external control plane for AI coding agents</text>
+  <text x="104" y="272" font-size="32" fill="#8b949e">An external control plane for AI coding agents</text>
   <!-- transcript -->
   <text x="100" y="336" font-size="25"><tspan fill="#3fb950">$</tspan><tspan fill="#e6edf3"> edward wrap -- pi "fix flaky test"</tspan></text>
   <text x="100" y="384" font-size="25"><tspan fill="#d29922">[PASSIVE STALL]</tspan><tspan fill="#e6edf3"> loop signature across 3 turns · $2,183 in tokens</tspan></text>
