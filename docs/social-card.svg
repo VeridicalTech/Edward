@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" font-family="'Fira Mono','Fira Code','DejaVu Sans Mono',Menlo,Consolas,monospace">
+  <rect width="1280" height="640" fill="#0d1117"/>
+  <!-- terminal window -->
+  <rect x="48" y="44" width="1184" height="524" rx="18" fill="#161b22" stroke="#30363d" stroke-width="2"/>
+  <line x1="48" y1="100" x2="1232" y2="100" stroke="#30363d" stroke-width="2"/>
+  <circle cx="86" cy="72" r="9" fill="#ff5f57"/>
+  <circle cx="118" cy="72" r="9" fill="#febc2e"/>
+  <circle cx="150" cy="72" r="9" fill="#28c840"/>
+  <text x="640" y="80" font-size="22" fill="#8b949e" text-anchor="middle">edward — live session</text>
+  <!-- wordmark -->
+  <text x="100" y="222" font-size="120" font-weight="bold" fill="#e6edf3">Edward<tspan fill="#3fb950">_</tspan></text>
+  <text x="104" y="278" font-size="34" fill="#8b949e">An external control plane for AI coding agents</text>
+  <!-- transcript -->
+  <text x="100" y="352" font-size="26"><tspan fill="#3fb950">$</tspan><tspan fill="#e6edf3"> edward wrap -- pi "fix flaky test"</tspan></text>
+  <text x="100" y="398" font-size="26"><tspan fill="#d29922">[PASSIVE STALL]</tspan><tspan fill="#e6edf3"> loop signature across 3 turns · $2,183 in tokens</tspan></text>
+  <text x="100" y="444" font-size="26"><tspan fill="#f85149" font-weight="bold">PAUSED</tspan><tspan fill="#8b949e"> — decision signed · receipt #18 · resume anytime</tspan></text>
+  <text x="100" y="490" font-size="26"><tspan fill="#3fb950">$</tspan><tspan fill="#3fb950"> </tspan><tspan font-size="26" fill="#3fb950">▋</tspan></text>
+  <!-- capability chips -->
+  <g font-size="22">
+    <rect x="100" y="520" width="270" height="40" rx="20" fill="none" stroke="#3fb950" stroke-width="1.5"/>
+    <text x="235" y="546" fill="#3fb950" text-anchor="middle">deterministic rules</text>
+    <rect x="390" y="520" width="204" height="40" rx="20" fill="none" stroke="#a371f7" stroke-width="1.5"/>
+    <text x="492" y="546" fill="#a371f7" text-anchor="middle">local 4B scorer</text>
+    <rect x="614" y="520" width="150" height="40" rx="20" fill="none" stroke="#d29922" stroke-width="1.5"/>
+    <text x="689" y="546" fill="#d29922" text-anchor="middle">resumable</text>
+  </g>
+  <!-- footer -->
+  <text x="640" y="616" font-size="26" fill="#8b949e" text-anchor="middle">github.com/VeridicalTech/Edward</text>
+  <text x="1232" y="616" font-size="22" fill="#30363d" text-anchor="end">MIT · Python 3.11+ · 0 deps</text>
+</svg>
