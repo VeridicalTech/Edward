@@ -10,7 +10,7 @@ import time
 
 from .config import load_policy
 from .engine import ControlPlane  # noqa: F401
-from .scorer import Scorer
+from .scorer import make_scorer
 from .evalcmd import eval_policy
 
 
@@ -22,7 +22,7 @@ def run_demo(n_trials: int = 3, policy_source: str = None, use_scorer: bool = Fa
     policy = load_policy(policy_source)
     scorer = None
     if use_scorer:
-        scorer = Scorer(policy.scorer_base_url, policy.scorer_timeout_seconds)
+        scorer = make_scorer(policy)
         health = scorer.health()
         if health and health.get("ready"):
             print(f"scorer: {health.get('model')} ready")

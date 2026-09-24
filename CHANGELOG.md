@@ -5,6 +5,14 @@ All notable changes to Edward are documented here. Format follows
 
 ## [Unreleased]
 
+### Added
+- Pluggable scorer backends (`edward/backends.py`): `EDWARD_SCORER_BACKEND`
+  selects `endpoint` (default LAN `/v1/score` server), `jev` (TypeSafe Jev —
+  all probes batched into one calibrated `/v1/systemone` call, confidence
+  surfaced for routing), or `heuristic` (deterministic marker stub for
+  offline demos/tests). `edward doctor` shows the active backend. Zero new
+  dependencies; tests run fully offline via injected transports.
+
 ### Changed
 - StepShield contract probe default is now `v1b` (evidence enrichment:
   temporal context, deterministic counters, keyword-guided excerpts);

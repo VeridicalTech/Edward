@@ -22,9 +22,11 @@ MAX_STATE_CHARS = 12_000
 
 
 class ScorerClient:
-    def __init__(self, base_url: str = SCORER_API_URL, timeout: float = 10.0):
+    def __init__(self, base_url: str = SCORER_API_URL, timeout: float = 10.0,
+                 post_fn=None):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
+        self._post_fn = post_fn
         self._request_count = 0
 
     def health(self) -> Optional[dict]:
@@ -60,14 +62,19 @@ class ScorerClient:
             "options": [{"id": oid, "description": desc} for oid, desc in options.items()],
         }
         try:
-            req = urllib.request.Request(
-                f"{self.base_url}/v1/score",
-                data=json.dumps(payload).encode(),
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                data = json.loads(resp.read())
+            headers = {"Content-Type": "application/json"}
+            if self._post_fn is not None:
+                data = self._post_fn(f"{self.base_url}/v1/score", payload,
+                                     headers, self.timeout)
+            else:
+                req = urllib.request.Request(
+                    f"{self.base_url}/v1/score",
+                    data=json.dumps(payload).encode(),
+                    headers=headers,
+                    method="POST",
+                )
+                with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                    data = json.loads(resp.read())
         except Exception:
             return None
         return self._decide(data)

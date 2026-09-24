@@ -28,7 +28,7 @@ from .engine import RESUMABLE_ACTIONS, ControlPlane
 from .notify import notify_stderr
 from .pi_client import PiRpcClient
 from .receipts import ReceiptChain, ensure_key, verify_chain
-from .scorer import Scorer
+from .scorer import make_scorer
 
 EXIT_OK = 0
 EXIT_ERROR = 1
@@ -189,10 +189,10 @@ def cmd_wrap(args, cmd) -> int:
     ephemeral = bool(args.ephemeral)
     scorer = None
     if policy.scorer_enabled:
-        scorer = Scorer(policy.scorer_base_url, policy.scorer_timeout_seconds)
+        scorer = make_scorer(policy)
         health = scorer.health()
         if health and health.get("ready"):
-            log_line(f"scorer ready: {health.get('model')}")
+            log_line(f"scorer ready: {health.get('model')} [{scorer.name}]")
         else:
             log_line("scorer unreachable — rule-only mode (degraded, still protective)")
             scorer = None
@@ -445,7 +445,7 @@ def cmd_eval(args) -> int:
     policy = load_policy(args.policy)
     scorer = None
     if args.scorer:
-        scorer = Scorer(policy.scorer_base_url, policy.scorer_timeout_seconds)
+        scorer = make_scorer(policy)
         if not scorer.health():
             print("scorer unreachable — evaluating rule-only", file=sys.stderr)
             scorer = None
@@ -570,12 +570,12 @@ def cmd_doctor(args) -> int:
         checks.append(("audit dir", f"{audit_dir} not writable: {exc}", False))
 
     policy = load_policy(args.policy)
-    scorer = Scorer(policy.scorer_base_url, policy.scorer_timeout_seconds)
+    scorer = make_scorer(policy)
     health = scorer.health()
     if health and health.get("ready"):
-        checks.append(("scorer", f"{health.get('model')} @ {policy.scorer_base_url} ready", True))
+        checks.append(("scorer", f"[{scorer.name}] {health.get('model')} @ {policy.scorer_base_url} ready", True))
     else:
-        checks.append(("scorer", f"unreachable @ {policy.scorer_base_url} (rule-only mode works without it)", False))
+        checks.append(("scorer", f"[{scorer.name}] unreachable @ {policy.scorer_base_url} (rule-only mode works without it)", False))
 
     ok = True
     for name, detail, good in checks:

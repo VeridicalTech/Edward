@@ -202,6 +202,9 @@ class FakeBreakerClient:
         return {"choice": "PAUSE", "confidence": 0.9,
                 "probabilities": {"PAUSE": 0.9}}
 
+    def score(self, state, question, options):
+        return self.ask_continue(state)
+
     def health(self):
         return {"status": "ok", "ready": True, "model": "fake"}
 
@@ -209,16 +212,16 @@ class FakeBreakerClient:
 class TestCircuitBreaker(unittest.TestCase):
     def test_opens_after_two_failures(self):
         s = Scorer("http://fake:1")
-        s.client = FakeBreakerClient(fail_times=2)
+        s.backend.client = FakeBreakerClient(fail_times=2)
         self.assertIsNone(s.consult({}, "r"))
         self.assertIsNone(s.consult({}, "r"))
-        calls_after_open = s.client.calls
+        calls_after_open = s.backend.client.calls
         self.assertIsNone(s.consult({}, "r"))  # breaker open: no call
-        self.assertEqual(s.client.calls, calls_after_open)
+        self.assertEqual(s.backend.client.calls, calls_after_open)
 
     def test_recovers_on_success(self):
         s = Scorer("http://fake:1")
-        s.client = FakeBreakerClient(fail_times=2)
+        s.backend.client = FakeBreakerClient(fail_times=2)
         s.consult({}, "r")
         s.consult({}, "r")
         r = s.consult({}, "r")  # breaker expired? cooldown 60s — force:

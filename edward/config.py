@@ -17,6 +17,10 @@ def _default_scorer_url() -> str:
     return os.environ.get("EDWARD_SCORER_URL", "http://localhost:8000")
 
 
+def _default_scorer_backend() -> str:
+    return os.environ.get("EDWARD_SCORER_BACKEND", "endpoint")
+
+
 TRIGGER_DEFAULTS = {
     "error_rate": 0.4,
     "error_rate_window": 8,
@@ -61,7 +65,8 @@ KNOWN_TOP_KEYS = {
 }
 KNOWN_NESTED = {
     "scorer": {"base_url": "scorer_base_url", "enabled": "scorer_enabled",
-               "timeout_seconds": "scorer_timeout_seconds"},
+               "timeout_seconds": "scorer_timeout_seconds",
+               "backend": "scorer_backend"},
     "notify": {"webhook_url": "webhook_url", "stderr_banner": "stderr_banner"},
     "intervention": {"cooldown_seconds": "cooldown_seconds",
                      "auto_resume_seconds": "auto_resume_seconds",
@@ -85,6 +90,7 @@ class Policy:
     session_dir: str = ""
     triggers: dict = field(default_factory=lambda: dict(TRIGGER_DEFAULTS))
     scorer_base_url: str = field(default_factory=_default_scorer_url)
+    scorer_backend: str = field(default_factory=_default_scorer_backend)
     scorer_enabled: bool = True
     scorer_timeout_seconds: float = 10.0
     webhook_url: str = ""
@@ -213,6 +219,7 @@ def policy_toml(policy: Policy) -> str:
         "",
         "[scorer]",
         f"base_url = \"{policy.scorer_base_url}\"",
+        f"backend = \"{policy.scorer_backend}\"",
         f"enabled = {str(policy.scorer_enabled).lower()}",
         f"timeout_seconds = {policy.scorer_timeout_seconds}",
         "",

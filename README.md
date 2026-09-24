@@ -142,6 +142,13 @@ any local OpenAI-compatible scoring endpoint (a 4B model on your GPU box is
 plenty — see [deploy/](deploy/) for the team-LAN topology). Scorer down?
 Edward logs a warning and runs rule-only. It stays protective.
 
+**Pluggable scorer backends.** `EDWARD_SCORER_BACKEND` selects where judgments
+come from: `endpoint` (default — the LAN scorer server above), `jev` (TypeSafe
+Jev — all probes batched into one calibrated call; set `TYPESAFE_API_KEY`), or
+`heuristic` (deterministic marker stub for offline demos and tests). `edward
+doctor` shows the active backend. All backends are advisory and share the same
+circuit breaker.
+
 **v0.2.0 highlights**
 
 - **Signed evidence receipts** — every audit record is Ed25519-signed into a
