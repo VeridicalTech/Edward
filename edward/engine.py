@@ -37,13 +37,16 @@ TERMINAL_ACTIONS = {"CANCEL", "ESCALATE", "BLOCK", "REQUEST_HUMAN_APPROVAL"}
 
 class ControlPlane:
     def __init__(self, policy, session: str = "", audit: Optional[AuditLog] = None,
-                 scorer: Optional[Scorer] = None, log: Optional[Callable[[str], None]] = None):
+                 scorer: Optional[Scorer] = None, log: Optional[Callable[[str], None]] = None,
+                 clock: Optional[Callable[[], float]] = None):
         self.policy = policy
         self.session = session
         self.audit = audit
         self.scorer = scorer
         self.log = log or (lambda msg: None)
-        self.state_engine = StateEngine(token_budget=policy.token_budget)
+        self.clock = clock or time.time
+        self.state_engine = StateEngine(token_budget=policy.token_budget,
+                                        clock=self.clock if clock else None)
         if policy.allowed_paths:
             self.state_engine.state.allowed_paths = list(policy.allowed_paths)
         self._last_fired = 0.0
@@ -66,7 +69,7 @@ class ControlPlane:
         return self.check()
 
     def check(self) -> Optional[Decision]:
-        now = time.time()
+        now = self.clock()
         if now - self._last_fired < self.policy.cooldown_seconds:
             return None
 
@@ -95,10 +98,15 @@ class ControlPlane:
                 except Exception as exc:
                     self.log(f"scorer error (degrading to rule): {exc}")
                     jev_result = None
+            if self.scorer is not None and (jev_result is None or "choice" not in jev_result):
+                # Scorer consulted but produced no usable verdict: the rule
+                # action stands, and the audit trail records the unresolved
+                # consultation instead of silently dropping it.
+                jev_result = {"unresolved": "scorer_unavailable"}
             decision_dict = {
                 "rule_action": "PAUSE",
-                "jev_action": jev_result["choice"] if jev_result else None,
-                "jev_confidence": jev_result["confidence"] if jev_result else 0.0,
+                "jev_action": (jev_result or {}).get("choice"),
+                "jev_confidence": (jev_result or {}).get("confidence", 0.0),
                 "authority": DecisionAuthority.SOFT_DECISION,
             }
             action, source = ControlKernel.resolve_action(decision_dict)

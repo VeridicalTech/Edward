@@ -116,3 +116,44 @@ class TestReceiptChain(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TestRotationAwareVerify(unittest.TestCase):
+    def _emit_and_sign(self, audit, chain, i):
+        log = AuditLog(audit)
+        log.emit("intervention", n=i, action="PAUSE")
+        with open(audit, encoding="utf-8") as fh:
+            lines = [json.loads(l) for l in fh if l.strip()]
+        chain.append(lines[-1])
+
+    def test_records_in_rotated_generation_verify(self):
+        with tempfile.TemporaryDirectory() as td:
+            seed, pub = ensure_key(os.path.join(td, "key"))
+            audit = os.path.join(td, "audit.jsonl")
+            receipts = os.path.join(td, "receipts.jsonl")
+            chain = ReceiptChain(receipts, seed, pub)
+            self._emit_and_sign(audit, chain, 1)
+            self._emit_and_sign(audit, chain, 2)
+            os.replace(audit, audit + ".1")  # rotation
+            self._emit_and_sign(audit, chain, 3)
+            self._emit_and_sign(audit, chain, 4)
+            result = verify_chain(audit, receipts)
+            self.assertTrue(result["ok"], result["errors"])
+            self.assertEqual(result["records"], 4, "must scan .1 + main")
+            self.assertFalse(any("absent" in w for w in result["warnings"]),
+                             result["warnings"])
+
+    def test_truly_missing_record_still_warns(self):
+        with tempfile.TemporaryDirectory() as td:
+            seed, pub = ensure_key(os.path.join(td, "key"))
+            audit = os.path.join(td, "audit.jsonl")
+            receipts = os.path.join(td, "receipts.jsonl")
+            chain = ReceiptChain(receipts, seed, pub)
+            self._emit_and_sign(audit, chain, 1)
+            # simulate deletion of the rotated generation: receipt exists,
+            # but its audit record survives in no generation
+            os.replace(audit, audit + ".gone")
+            self._emit_and_sign(audit, chain, 2)
+            result = verify_chain(audit, receipts)
+            self.assertTrue(any("absent" in w for w in result["warnings"]),
+                             result["warnings"])

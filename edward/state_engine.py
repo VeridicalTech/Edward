@@ -36,6 +36,7 @@ class AgentState:
     allowed_paths: list[str] = field(default_factory=list)
     consecutive_unverified_writes: int = 0
     total_writes: int = 0
+    clock: Optional[callable] = None  # injectable for replay determinism
 
     @property
     def error_rate(self) -> float:
@@ -54,7 +55,7 @@ class AgentState:
     def elapsed_seconds(self) -> float:
         if self.started_at == 0:
             return 0.0
-        return time.time() - self.started_at
+        return (self.clock or time.time)() - self.started_at
 
     @property
     def recovery_signal(self) -> bool:
@@ -128,13 +129,16 @@ DANGEROUS_PATTERNS = [
 
 
 class StateEngine:
-    def __init__(self, token_budget: int = 200_000):
-        self.state = AgentState(token_budget=token_budget)
+    def __init__(self, token_budget: int = 200_000, clock=None):
+        self.state = AgentState(token_budget=token_budget, clock=clock)
         self._pending_args: dict[str, dict] = {}
+
+    def _now(self) -> float:
+        return (self.state.clock or time.time)()
 
     def process_event(self, event: dict) -> None:
         event_type = event.get("type", "")
-        now = time.time()
+        now = self._now()
         self.state.last_activity = now
 
         if event_type == "agent_start":

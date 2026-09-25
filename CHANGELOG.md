@@ -6,6 +6,27 @@ All notable changes to Edward are documented here. Format follows
 ## [Unreleased]
 
 ### Added
+- Agent adapter registry (`edward/adapters.py`): `edward wrap --agent
+  auto|generic|pi|<plugin>`; third-party adapters plug in via the
+  `edward.adapters` entry-point group. Pi helpers moved out of the CLI
+  module (re-exported for API compatibility).
+- Unresolved scorer consultations are now recorded: when a deterministic
+  trigger fires but the scorer yields no verdict, the audit record carries
+  `jev.unresolved = "scorer_unavailable"` and `edward audit` reports
+  `unresolved_interventions` — rule action stands, evidence is kept.
+- Injectable clock in `ControlPlane`/`StateEngine`; replay-determinism test
+  pins decision outcomes to event content, not wall clock.
+
+### Fixed
+- Interventions now terminate the **whole agent process tree** (POSIX
+  process groups + SIGTERM→SIGKILL escalation; Windows
+  CREATE_NEW_PROCESS_GROUP + CTRL_BREAK_EVENT → `taskkill /T /F`) —
+  previously only the direct child was killed, orphaning agent subprocesses.
+- `edward verify` scans rotated audit generations (`.1`–`.3`): a recent
+  rotation no longer produces false "record absent" warnings; true
+  deletions still warn.
+
+### Added
 - Pluggable scorer backends (`edward/backends.py`): `EDWARD_SCORER_BACKEND`
   selects `endpoint` (default LAN `/v1/score` server), `jev` (TypeSafe Jev —
   all probes batched into one calibrated `/v1/systemone` call, confidence

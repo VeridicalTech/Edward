@@ -82,6 +82,7 @@ def summarize(path) -> dict:
         "file": str(path), "sessions": 0, "interventions": 0,
         "by_action": {}, "by_decision_type": {}, "tokens_at_intervention": [],
         "cost_usd_at_intervention": [], "est_avoided_usd": 0.0,
+        "unresolved_interventions": 0,
         "first_ts": None, "last_ts": None,
     }
     sessions = set()
@@ -115,5 +116,8 @@ def summarize(path) -> dict:
                     summary["cost_usd_at_intervention"].append(mss["cost_usd"])
                 if rec.get("est_avoided_usd") is not None:
                     summary["est_avoided_usd"] += rec["est_avoided_usd"]
+                jev = rec.get("jev") or {}
+                if isinstance(jev, dict) and jev.get("unresolved"):
+                    summary["unresolved_interventions"] += 1
     summary["sessions"] = len(sessions)
     return summary

@@ -29,6 +29,8 @@ from .notify import notify_stderr
 from .pi_client import PiRpcClient
 from .receipts import ReceiptChain, ensure_key, verify_chain
 from .scorer import make_scorer
+from .adapters import (build_pi_command, resolve_adapter,
+                        _extract_pi_prompt, _is_pi_rpc)  # re-exported for API compat
 
 EXIT_OK = 0
 EXIT_ERROR = 1
@@ -37,9 +39,6 @@ EXIT_TERMINATED = 76
 EXIT_SIGINT = 130
 
 DEFAULT_AUDIT_PATH = os.path.join(os.path.expanduser("~"), ".edward", "audit.jsonl")
-PI_VALUE_FLAGS = {"--provider", "--model", "--mode", "--session", "--session-id",
-                  "--name", "--thinking", "--models", "--tools", "--exclude-tools",
-                  "--session-dir", "--system-prompt", "--append-system-prompt"}
 MAX_RESUMES = 5
 INACTIVITY_CAP_SECONDS = 180
 
@@ -53,39 +52,6 @@ def _split_cmd(argv):
         i = argv.index("--")
         return argv[:i], argv[i + 1:]
     return argv, None
-
-
-def _is_pi_rpc(cmd) -> bool:
-    return bool(cmd) and os.path.basename(cmd[0]) == "pi"
-
-
-def _extract_pi_prompt(cmd) -> str:
-    parts = []
-    skip_next = False
-    for arg in cmd[1:]:
-        if skip_next:
-            skip_next = False
-            continue
-        if arg in PI_VALUE_FLAGS:
-            skip_next = True
-            continue
-        if arg.startswith("-"):
-            continue
-        parts.append(arg)
-    return " ".join(parts)
-
-
-def build_pi_command(cmd, session_id=None, ephemeral=False) -> list:
-    base = list(cmd)
-    if "--mode" not in base:
-        base = [base[0], "--mode", "rpc"] + base[1:]
-    if "--no-session" in base:
-        base.remove("--no-session")
-    if ephemeral:
-        base.append("--no-session")
-    elif session_id:
-        base += ["--session-id", f"edward-{session_id}"]
-    return base
 
 
 def _last_paused_session(audit_path) -> Optional[str]:
@@ -115,18 +81,8 @@ class Killer:
         self.terminate()
 
     def terminate(self) -> None:
-        if self.proc.poll() is None:
-            try:
-                self.proc.terminate()
-            except OSError:
-                return
-            try:
-                self.proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                try:
-                    self.proc.kill()
-                except OSError:
-                    pass
+        from .procmgmt import terminate_tree
+        terminate_tree(self.proc)
 
 
 def _request_approval(policy: Policy, session: str) -> str:
@@ -197,16 +153,18 @@ def cmd_wrap(args, cmd) -> int:
             log_line("scorer unreachable — rule-only mode (degraded, still protective)")
             scorer = None
 
+    adapter = resolve_adapter(getattr(args, "agent", "auto"), cmd)
     resumes = 0
     current_cmd = list(cmd)
     outcome = None
     while True:
         run_cmd = list(current_cmd)
-        if _is_pi_rpc(run_cmd):
-            run_cmd = build_pi_command(run_cmd, session_id=None if ephemeral else session_id,
-                                       ephemeral=ephemeral)
+        if adapter is not None and adapter.matches(run_cmd):
+            run_cmd = adapter.build_command(run_cmd, session_id=None if ephemeral else session_id,
+                                            ephemeral=ephemeral)
         outcome = _run_under_control(run_cmd, policy, scorer, audit, session_id,
-                                     max_seconds=args.max_seconds, is_pi=_is_pi_rpc(run_cmd))
+                                     max_seconds=args.max_seconds,
+                                     is_pi=bool(adapter is not None and adapter.matches(run_cmd)))
         if outcome == EXIT_PAUSED and policy.wait_approval_seconds > 0 \
                 and resumes < MAX_RESUMES and _is_pi_rpc(current_cmd):
             decision = _request_approval(policy, session_id)
@@ -333,8 +291,9 @@ def _run_generic(cmd, plane: ControlPlane, policy: Policy, max_seconds) -> int:
     """Universal path: run any command; auto-detect JSONL events, else
     watchdog on wall clock + output inactivity."""
     try:
-        proc = subprocess.Popen(cmd, cwd=os.getcwd(), stdout=subprocess.PIPE,
-                                stderr=subprocess.STDOUT)
+        from .procmgmt import spawn
+        proc = spawn(cmd, cwd=os.getcwd(), stdout=subprocess.PIPE,
+                     stderr=subprocess.STDOUT)
     except FileNotFoundError as exc:
         print(f"error: cannot spawn {cmd[0]!r}: {exc}", file=sys.stderr)
         return EXIT_ERROR
@@ -642,6 +601,7 @@ def build_parser() -> argparse.ArgumentParser:
                         help="on PAUSE: send decision links (Slack) and wait up to N seconds for resume/kill")
     p_wrap.add_argument("--no-receipts", action="store_true", help="disable signed receipts")
     p_wrap.add_argument("--continue", dest="continue_session", action="store_true", help="resume the most recently paused session (session id recovered from audit)")
+    p_wrap.add_argument("--agent", default="auto", help="agent adapter: auto (default), generic, pi, or a plugin name (entry-point group edward.adapters)")
     p_wrap.add_argument("--session", metavar="ID", help="explicit edward session id to resume (with --continue)")
     p_wrap.add_argument("--ephemeral", action="store_true", help="do not persist a resumable pi session (no pause/resume)")
     p_wrap.add_argument("--", dest="cmd", nargs=argparse.REMAINDER, help="agent command to run")

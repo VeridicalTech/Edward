@@ -235,21 +235,28 @@ class ReceiptChain:
 
 
 def verify_chain(audit_path, receipts_path) -> dict:
-    """Offline verification. Matching is by record hash, not position:
-    audit rotation yields warnings, while unsigned present records, chain
-    breaks, or bad signatures fail verification."""
+    """Offline verification, rotation-aware.
+
+    Matching is by record hash, not position: the audit file plus its
+    retained rotated generations (`.1`, `.2`, `.3`) are all scanned, so a
+    recent rotation no longer produces false "absent" warnings. Records
+    present in no generation still warn (deleted), while unsigned present
+    records, chain breaks, or bad signatures fail verification."""
     audit_path, receipts_path = Path(audit_path), Path(receipts_path)
     errors, warnings = [], []
     records = []
-    if audit_path.exists():
-        with open(audit_path, "r", encoding="utf-8", errors="replace") as fh:
+    for gen in (".3", ".2", ".1", ""):  # oldest generation first
+        part = Path(str(audit_path) + gen)
+        if not part.exists():
+            continue
+        with open(part, "r", encoding="utf-8", errors="replace") as fh:
             for line in fh:
                 line = line.strip()
                 if line:
                     try:
                         records.append(json.loads(line))
                     except json.JSONDecodeError as exc:
-                        errors.append(f"audit: unparseable line: {exc}")
+                        errors.append(f"audit{gen}: unparseable line: {exc}")
     receipts = []
     if receipts_path.exists():
         with open(receipts_path, "r", encoding="utf-8", errors="replace") as fh:

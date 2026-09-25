@@ -130,7 +130,8 @@ PASS in 0.0s (deterministic rules frozen defaults; scorer off)
 
 Real output, not a mock — six failure scenarios against the frozen rule set,
 plus the two clean controls. Wraps **any subprocess**: Pi, Codex, `claude -p`,
-CI jobs, plain scripts.
+CI jobs, plain scripts. `--agent auto|generic|pi` picks the adapter (pi gets
+native RPC; the registry is extensible via `edward.adapters` entry points).
 
 Interventions are **resumable, not fatal**: PAUSE exits with code 75, pins the
 agent session, and `edward wrap --continue` picks the same session back up
