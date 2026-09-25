@@ -5,3 +5,4 @@ node_modules/
 *.egg-info/
 PRODUCT_DESIGN.md
 dist/
+build/
