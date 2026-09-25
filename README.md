@@ -150,6 +150,16 @@ Jev — all probes batched into one calibrated call; set `TYPESAFE_API_KEY`), or
 doctor` shows the active backend. All backends are advisory and share the same
 circuit breaker.
 
+**Edward + Jev — who decides what.** With the `jev` backend
+([`edward/backends.py`](edward/backends.py)), one Jev call receives the full
+cross-turn state (error trends, write streaks, budget) and returns calibrated
+judgments — *should this trajectory continue, pause, or escalate, and how
+confident is that?* Deterministic code owns everything irreversible: blocklists,
+scope checks, budget caps, intervention execution, and the signed receipt chain.
+Jev's confidence gates routing, never actions. Known limitation: the local-4B
+and Jev paths trade recall differently (see [BENCHMARK.md](BENCHMARK.md) for
+measured numbers and reproduction commands).
+
 **v0.2.0 highlights**
 
 - **Signed evidence receipts** — every audit record is Ed25519-signed into a
