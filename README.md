@@ -7,7 +7,7 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/VeridicalTech/Edward/ci.yml?branch=main&label=CI&style=flat-square&logo=github)](https://github.com/VeridicalTech/Edward/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/edward-guard?style=flat-square&color=blue)](https://pypi.org/project/edward-guard/)
 [![downloads](https://img.shields.io/pypi/dw/edward-guard?style=flat-square)](https://pypi.org/project/edward-guard/)
-[![python](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square)](pyproject.toml)
+[![python](https://img.shields.io/pypi/pyversions/edward-guard)](https://pypi.org/project/edward-guard/)
 [![license](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 [![deps](https://img.shields.io/badge/runtime%20deps-0-brightgreen?style=flat-square)](#why-zero-dependencies)
 [![benchmark](https://img.shields.io/badge/StepShield-EIR%E2%82%83_0.778-8A2BE2?style=flat-square)](BENCHMARK.md)
