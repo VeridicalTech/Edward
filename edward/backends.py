@@ -58,6 +58,10 @@ class JudgmentBackend:
         results = self.ask_many(state, {"q": (question, options)})
         return results.get("q")
 
+    def score(self, state, question: str, options: dict) -> Optional[dict]:
+        """Compatibility alias for call sites written against ScorerClient."""
+        return self.ask(state, question, options)
+
     def ask_many(self, state, questions: dict) -> dict:
         """questions: {qid: (question, options)} → {qid: judgment-dict}.
 

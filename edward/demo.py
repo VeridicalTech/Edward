@@ -10,7 +10,7 @@ import time
 
 from .config import load_policy
 from .engine import ControlPlane  # noqa: F401
-from .scorer import make_scorer
+from .scorer import make_scorer, Scorer
 from .evalcmd import eval_policy
 
 
@@ -18,14 +18,20 @@ def _c(code, text):
     return f"\033[{code}m{text}\033[0m" if sys.stdout.isatty() else text
 
 
-def run_demo(n_trials: int = 3, policy_source: str = None, use_scorer: bool = False) -> int:
+def run_demo(n_trials: int = 3, policy_source: str = None, use_scorer: bool = False,
+             offline: bool = False) -> int:
     policy = load_policy(policy_source)
     scorer = None
-    if use_scorer:
+    if use_scorer and offline:
+        from .backends import HeuristicBackend
+        scorer = Scorer(backend=HeuristicBackend())
+        print("scorer: heuristic-markers ready (offline stub — exercises the "
+              "plumbing, not real judgment)")
+    elif use_scorer:
         scorer = make_scorer(policy)
         health = scorer.health()
         if health and health.get("ready"):
-            print(f"scorer: {health.get('model')} ready")
+            print(f"scorer: {health.get('model')} ready [{scorer.name}]")
         else:
             print(f"{_c('33', 'scorer unreachable — running rule-only demo')}")
             scorer = None

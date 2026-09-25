@@ -443,11 +443,12 @@ def evaluate_mode(trajectories: list, policy, mode: str = "rules",
     if mode == "contract":
         if not scorer_base_url:
             raise ValueError("contract mode requires scorer_base_url")
-        client = ScorerClient(base_url=scorer_base_url, timeout=15.0)
+        from .backends import backend_from_env
+        client, backend_note = backend_from_env(scorer_base_url, 15.0)
         health = client.health()
         if not (health and health.get("ready")):
-            raise RuntimeError(f"scorer unreachable at {scorer_base_url}")
-        log(f"contract probe: scorer {health.get('model')} ready (probe {probe})")
+            raise RuntimeError(f"scorer unavailable: {backend_note or scorer_base_url}")
+        log(f"contract probe: scorer [{client.name}] {health.get('model')} ready (probe {probe})")
 
     suite = SuiteMetrics()
     for t in trajectories:

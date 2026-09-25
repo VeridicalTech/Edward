@@ -5,7 +5,14 @@ All notable changes to Edward are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-23
+
 ### Added
+- `--json` flag for `edward audit`: emits the summarize() dict as JSON for CI
+  badges and fleet polling; `--tail` keeps raw-line output (community PR #5,
+  thanks @RugvedBane).
+- `edward demo --offline` (with `--live-scorer`): full rules+scorer pipeline
+  against a deterministic heuristic stub — no GPU, no API key.
 - Agent adapter registry (`edward/adapters.py`): `edward wrap --agent
   auto|generic|pi|<plugin>`; third-party adapters plug in via the
   `edward.adapters` entry-point group. Pi helpers moved out of the CLI

@@ -394,7 +394,8 @@ def _pump(proc, lines: queue.Queue) -> None:
 
 def cmd_demo(args) -> int:
     from .demo import run_demo
-    return run_demo(n_trials=args.trials, policy_source=args.policy, use_scorer=args.live_scorer)
+    return run_demo(n_trials=args.trials, policy_source=args.policy,
+                    use_scorer=args.live_scorer, offline=getattr(args, "offline", False))
 
 
 def cmd_eval(args) -> int:
@@ -610,6 +611,8 @@ def build_parser() -> argparse.ArgumentParser:
     add_common(p_demo)
     p_demo.add_argument("--trials", type=int, default=3)
     p_demo.add_argument("--live-scorer", action="store_true", help="include live scorer calls")
+    p_demo.add_argument("--offline", action="store_true",
+                        help="with --live-scorer: use the deterministic heuristic stub (no GPU, no API key)")
 
     p_eval = sub.add_parser("eval", help="evaluate a policy against the scenario suite")
     add_common(p_eval)

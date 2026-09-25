@@ -106,6 +106,7 @@ pipx install edward-guard            # zero dependencies, Python 3.11+
 
 edward doctor                        # environment checks
 edward demo                          # self-running proof: 6 failure scenarios, PASS/FAIL
+edward demo --live-scorer --offline  # same proof through the full scorer pipeline (heuristic stub, no GPU)
 
 edward wrap -- pi "fix the flaky test"                     # full monitoring + intervention
 edward wrap --no-scorer -- python my_agent.py              # any command, rule-only
