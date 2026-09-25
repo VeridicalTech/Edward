@@ -75,12 +75,13 @@ Edward validates itself against **[StepShield](https://github.com/glo26/stepshie
 | Detector | Recall | FPR (clean) | EIR₃ (timing) | Cost / decision |
 |---|---|---|---|---|
 | LLMJudge (GPT-4.1-mini, paper) | **95.4%** | 5.6% | 0.89 | GPT-4.1-mini price |
+| **Edward contract probe (Jev 1.13)** | 59.3% | **10.2%** | **0.91** | ~$0.0001, one batched call |
+| **Edward contract probe (local 4B)** | 58.3% | 17.6% | **0.78** | **~$0.00002, on your GPU** |
+| **Edward rules only** | 7.4% | — | — | 0 |
 | HybridGuard (paper) | 75.9% | 44.4% | 0.40 | — |
-| **Edward contract probe (local 4B)** | 57.4% | 20.4% | **0.79** | **~$0.00002** |
-| **Edward rules only** | 7.4% | **1.9%** | — | 0 |
 | StaticGuard 847 rules (paper) | 86.1% | 77.8% | 0.23 | — |
 
-The deterministic layer alone is quantitatively blind to content-semantic violations (7.4%) — the "silent corruption" gap — while keeping the best false-positive rate. Adding a **local 4B scorer with evidence-grounded task-contract probes** and asymmetric temporal confirmation lands in LLMJudge-tier timing territory at zero marginal cost. Full measurement series and reproduction commands: [BENCHMARK.md](BENCHMARK.md).
+The deterministic layer alone is quantitatively blind to content-semantic violations (7.4%) — the "silent corruption" gap — while keeping the best false-positive rate. Swapping the judgment backend changes the trade, not the architecture: the **local 4B** keeps events on your network at zero marginal cost; **TypeSafe Jev** lifts EIR₃ above the paper's GPT-4.1-mini judge (0.91 vs 0.89) with 42% fewer false positives, one batched calibrated call per probe battery. Trajectory-level recall is the shared frontier for small judges — we measure and publish it rather than claim it away. Full series, raw logs, reproduction commands: [BENCHMARK.md](BENCHMARK.md).
 
 ## What it detects
 
@@ -161,13 +162,19 @@ Jev's confidence gates routing, never actions. Known limitation: the local-4B
 and Jev paths trade recall differently (see [BENCHMARK.md](BENCHMARK.md) for
 measured numbers and reproduction commands).
 
-**v0.2.0 highlights**
+**v0.3.0 highlights**
 
-- **Signed evidence receipts** — every audit record is Ed25519-signed into a
-  hash chain (pure stdlib, RFC 8032 vectors); `edward verify` proves
-  tamper-evidence offline. Publish your public key; anyone can check.
-- **Human approval loop** — `--wait-approval 300` sends Resume/Kill links to
-  Slack (or stderr) and waits; PAUSE becomes a decision, not a dead end.
+- **Pluggable scorer backends** — `EDWARD_SCORER_BACKEND` selects `endpoint`
+  (your LAN 4B), `jev` (TypeSafe Jev: all probes in one batched calibrated
+  call), or `heuristic`. `edward demo --live-scorer --offline` runs the full
+  rules+scorer pipeline with **no GPU and no API key**.
+- **Agent adapter registry** — `--agent auto|generic|pi|<plugin>`; third-party
+  adapters join via the `edward.adapters` entry-point group.
+- **Process-tree interventions** — pause/kill terminate the whole agent
+  subtree (POSIX process groups, Windows CTRL_BREAK + taskkill /T) — no more
+  orphaned npm/python children.
+- **v0.2.0** added signed evidence receipts (Ed25519 hash chain, offline
+  `edward verify`) and the human approval loop (`--wait-approval 300`).
 
 <div align="center">
 <img src="docs/gif/resume_verify.gif" alt="resume from audit + offline receipt verification" width="780">
@@ -200,10 +207,10 @@ deploy/                team-LAN deployment templates
 
 ## Status & roadmap
 
-- [x] v0.1.1 on PyPI, CI on three platforms
-- [x] StepShield integration with paper-aligned EIR metrics
+- [x] v0.3.0 on PyPI: scorer backends (endpoint / Jev / heuristic), agent adapter registry, process-tree hardening
+- [x] StepShield integration with paper-aligned EIR metrics — including the **Jev 1.13 backend row (EIR₃ 0.906)**
+- [x] Scorer fine-tune — attempted and abandoned under a pre-registered two-strike protocol (post-mortem in BENCHMARK.md)
 - [ ] Robustness suite as `edward eval --suite robustness`
-- [ ] Scorer fine-tune (targets FPR; data flywheel from audit logs)
 - [ ] Cloud fleet console (team tier)
 
 ## Contributing
