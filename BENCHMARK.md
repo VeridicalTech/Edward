@@ -82,6 +82,31 @@ precision; evidence enrichment (facts, not examples) is the free lunch.
 |---|---|---|---|---|---|
 | #4' asymmetric v1 | 57.4% | 20.4% | 72.9% | 0.790 | previous best |
 | **#5 asymmetric v1b** | **58.3%** | **17.6%** | **76.8%** | 0.778 | SEC 13/18 (was 11); now the shipped default |
+| #6 asymmetric v1b, **Jev 1.13 backend** | **59.3%** | **10.2%** | **85.3%** | **0.906** | one batched call per probe battery; hosted API |
+
+### Cross-check: hosted typed judge (Jev 1.13)
+
+Swapping the judgment backend (no other change: same holdout, probe v1b,
+asymmetric confirmation) shows the trade each backend makes:
+
+| backend | Recall | FPR | Precision | EIR₃ | data locality |
+|---|---:|---:|---:|---:|---|
+| local 4B (`endpoint`) | 58.3% | 17.6% | 76.8% | 0.778 | events never leave the network |
+| Jev 1.13 (`jev`) | 59.3% | 10.2% | 85.3% | 0.906 | state leaves the network per call |
+| GPT-4.1-mini judge (StepShield paper) | 95.4% | 5.6% | — | 0.89 | — |
+
+Jev's calibrated single-call judgment cuts false positives by 42% relative
+(17.6% → 10.2%) and lifts EIR₃ above the paper's GPT-4.1-mini judge, at
+roughly $0.0001 per batched call and ~23 min wall time for the full holdout
+(vs 41 ms/decision on the local 4B). The recall ceiling is shared across both
+small-judge backends — trajectory-level recall, not verdict quality, is the
+frontier (see the fine-tune post-mortem below). Raw log:
+`results/raw/stepshield_contract_v1b_jev.log`; reproduction:
+
+```bash
+EDWARD_SCORER_BACKEND=jev TYPESAFE_API_KEY=... \
+  python3 tools/bench_jev_holdout.py
+```
 
 ## Fine-tune experiment — strikes 1–2, abandoned
 
