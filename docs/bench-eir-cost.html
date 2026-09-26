@@ -1,0 +1,50 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { width:960px; height:400px; background:#0d1117; color:#e6edf3; font-family:'Fira Mono','Fira Code','DejaVu Sans Mono',Menlo,Consolas,monospace; }
+.canvas { padding:14px 18px; height:100%; }
+h1 { font-size:16px; text-align:center; margin-bottom:14px; }
+.panels { display:grid; grid-template-columns: 1fr 300px; gap:30px; }
+.p-title { color:#8b949e; font-size:12px; margin-bottom:12px; }
+.brow { display:flex; align-items:center; margin-bottom:13px; }
+.blabel { width:170px; text-align:right; padding-right:10px; color:#8b949e; font-size:11.5px; }
+.btrack { flex:1; height:22px; position:relative; }
+.bfill { height:100%; border-radius:4px; }
+.bval { position:absolute; left:calc(100% + 8px); top:2px; font-size:11.5px; }
+.foot { color:#6e7681; font-size:10.5px; margin-top:6px; line-height:1.5; }
+.scatter { position:relative; height:210px; border-left:1.5px solid #30363d; border-bottom:1.5px solid #30363d; margin-left:34px; }
+.gridline { position:absolute; left:0; right:-8px; border-top:1px dashed #21262d; }
+.ylab { position:absolute; left:-32px; color:#6e7681; font-size:10px; }
+.xlab { position:absolute; bottom:-18px; color:#6e7681; font-size:10px; transform:translateX(-50%); }
+.dot { position:absolute; width:14px; height:14px; border-radius:50%; transform:translate(-50%,50%); }
+.dlbl { position:absolute; font-size:11px; white-space:nowrap; }
+.foot2 { text-align:center; color:#6e7681; font-size:10.5px; margin-top:26px; }
+</style></head><body><div class="canvas">
+<h1>StepShield holdout (216) — intervention quality vs cost</h1>
+<div class="panels">
+  <div>
+    <div class="p-title">EIR₃ (timing)</div>
+    <div class="brow"><div class="blabel">Edward + Jev 1.13</div><div class="btrack"><div class="bfill" style="width:90.6%;background:#a371f7"></div><span class="bval">0.906</span></div></div>
+    <div class="brow"><div class="blabel">GPT-4.1-mini judge</div><div class="btrack"><div class="bfill" style="width:89%;background:#58a6ff"></div><span class="bval">0.89</span></div></div>
+    <div class="brow"><div class="blabel">Edward local 4B</div><div class="btrack"><div class="bfill" style="width:77.8%;background:#3fb950"></div><span class="bval">0.778</span></div></div>
+    <div class="brow"><div class="blabel">HybridGuard (paper)</div><div class="btrack"><div class="bfill" style="width:40%;background:#6e7681"></div><span class="bval">0.40</span></div></div>
+    <div class="brow"><div class="blabel">StaticGuard 847 rules</div><div class="btrack"><div class="bfill" style="width:23%;background:#6e7681"></div><span class="bval">0.23</span></div></div>
+    <div class="foot">rules-only: recall 7.4% / FPR 1.9% — blind to semantics, in BENCHMARK.md</div>
+  </div>
+  <div>
+    <div class="p-title">cost / decision (log) →</div>
+    <div class="scatter">
+      <div class="gridline" style="bottom:33.3%"></div><span class="ylab" style="bottom:calc(33.3% - 5px)">0.8</span>
+      <div class="gridline" style="bottom:66.7%"></div><span class="ylab" style="bottom:calc(66.7% - 5px)">0.9</span>
+      <div class="gridline" style="bottom:100%"></div><span class="ylab" style="bottom:calc(100% - 5px)">1.0</span>
+      <span class="xlab" style="left:0%">1e-5</span><span class="xlab" style="left:50%">1e-4</span><span class="xlab" style="left:100%">1e-3</span>
+      <div class="dot" style="left:15%;bottom:26%;background:#3fb950"></div>
+      <div class="dlbl" style="left:15%;bottom:26%;transform:translate(-72%,180%);color:#e6edf3">local 4B ($0.00002, 0.78)</div>
+      <div class="dot" style="left:50%;bottom:68.7%;background:#a371f7"></div>
+      <div class="dlbl" style="left:50%;bottom:68.7%;transform:translate(-50%,160%);color:#e6edf3">Jev 1.13 ($0.0001, 0.91)</div>
+      <div class="dot" style="left:87.4%;bottom:63.3%;background:#58a6ff"></div>
+      <div class="dlbl" style="left:87.4%;bottom:63.3%;transform:translate(-105%,145%);color:#e6edf3">GPT-4.1-mini (est. $0.00056, 0.89)</div>
+    </div>
+    <div class="foot2">Jev: 10× cheaper than the paper judge, higher EIR₃</div>
+  </div>
+</div>
+</div></body></html>

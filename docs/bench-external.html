@@ -1,0 +1,33 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { width:960px; height:340px; background:#0d1117; color:#e6edf3; font-family:'Fira Mono','Fira Code','DejaVu Sans Mono',Menlo,Consolas,monospace; }
+.canvas { padding:14px 20px; }
+h1 { font-size:16px; text-align:center; margin-bottom:14px; }
+.panels { display:grid; grid-template-columns: 1.15fr 1fr; gap:34px; }
+.p-title { color:#8b949e; font-size:12px; margin-bottom:12px; }
+.brow { display:flex; align-items:center; margin-bottom:14px; }
+.blabel { width:150px; text-align:right; padding-right:10px; color:#8b949e; font-size:11.5px; }
+.btrack { flex:1; height:22px; position:relative; }
+.bfill { height:100%; border-radius:4px; }
+.bval { position:absolute; left:calc(100% + 8px); top:2px; font-size:11.5px; white-space:nowrap; }
+.foot { color:#6e7681; font-size:10.5px; margin-top:4px; line-height:1.5; }
+.foot2 { text-align:center; color:#6e7681; font-size:10.5px; margin-top:20px; }
+</style></head><body><div class="canvas">
+<h1>External academic benchmarks — RedCode-Exec + ATBench</h1>
+<div class="panels">
+  <div>
+    <div class="p-title">RedCode-Exec: unsafe-command recognition</div>
+    <div class="brow"><div class="blabel">Edward + Jev probe</div><div class="btrack"><div class="bfill" style="width:70.5%;background:#a371f7"></div><span class="bval">70.5% (0% benign FPR)</span></div></div>
+    <div class="brow"><div class="blabel">Edward deterministic</div><div class="btrack"><div class="bfill" style="width:5%;background:#3fb950"></div><span class="bval">5.0% (0% benign FPR)</span></div></div>
+    <div class="foot">bash subset n=600 · benign control (n=59) is ours,<br>not the benchmark's</div>
+  </div>
+  <div>
+    <div class="p-title">ATBench: unsafe-trajectory F1</div>
+    <div class="brow"><div class="blabel">GPT-5.4 (paper)</div><div class="btrack"><div class="bfill" style="width:76.7%;background:#58a6ff"></div><span class="bval">0.767</span></div></div>
+    <div class="brow"><div class="blabel">Jev (sweep best)</div><div class="btrack"><div class="bfill" style="width:70.4%;background:#c398f9"></div><span class="bval">0.704</span></div></div>
+    <div class="brow"><div class="blabel">Jev (default)</div><div class="btrack"><div class="bfill" style="width:68.7%;background:#a371f7"></div><span class="bval">0.687</span></div></div>
+    <div class="foot">n=1000 · 38s · ≈$0.1 · trigger-gated mode targets a different axis</div>
+  </div>
+</div>
+<div class="foot2">Jev 1.13 backend · one batched call per probe battery · raw logs + repro scripts in BENCHMARK.md</div>
+</div></body></html>

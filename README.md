@@ -63,11 +63,11 @@ Edward validates itself against **[StepShield](https://github.com/glo26/stepshie
 The deterministic layer alone is quantitatively blind to content-semantic violations (7.4%) — the "silent corruption" gap — while keeping the best false-positive rate. Swapping the judgment backend changes the trade, not the architecture: the **local 4B** keeps events on your network at zero marginal cost; **TypeSafe Jev** lifts EIR₃ above the paper's GPT-4.1-mini judge (0.91 vs 0.89) with 42% fewer false positives, one batched calibrated call per probe battery. Trajectory-level recall is the shared frontier for small judges — we measure and publish it rather than claim it away. Full series, raw logs, reproduction commands: [BENCHMARK.md](BENCHMARK.md).
 
 <div align="center">
-<img src="docs/bench-eir-cost.svg" alt="StepShield holdout: EIR3 by system and cost-vs-quality scatter" width="880">
+<img src="docs/bench-eir-cost.png" alt="StepShield holdout: EIR3 by system and cost-vs-quality scatter" width="880">
 <br><br>
-<img src="docs/bench-families.svg" alt="StepShield holdout recall by attack family: Jev 1.13 vs local 4B" width="880">
+<img src="docs/bench-families.png" alt="StepShield holdout recall by attack family: Jev 1.13 vs local 4B" width="880">
 <br><br>
-<img src="docs/bench-external.svg" alt="External benchmarks: RedCode-Exec recognition and ATBench F1" width="880">
+<img src="docs/bench-external.png" alt="External benchmarks: RedCode-Exec recognition and ATBench F1" width="880">
 </div>
 
 ## What it detects

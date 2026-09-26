@@ -1,0 +1,42 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { width:960px; height:340px; background:#0d1117; color:#e6edf3; font-family:'Fira Mono','Fira Code','DejaVu Sans Mono',Menlo,Consolas,monospace; }
+.canvas { padding:14px 24px; }
+h1 { font-size:16px; text-align:center; margin-bottom:6px; }
+.plot { position:relative; height:190px; margin:10px 30px 0 56px; border-left:1.5px solid #30363d; border-bottom:1.5px solid #30363d; }
+.gl { position:absolute; left:0; right:0; border-top:1px dashed #21262d; }
+.gl span { position:absolute; left:-46px; top:-6px; color:#6e7681; font-size:10px; }
+.groups { display:flex; height:100%; align-items:flex-end; justify-content:space-around; }
+.group { display:flex; gap:3px; align-items:flex-end; height:100%; position:relative; }
+.bar { width:30px; border-radius:3px 3px 0 0; position:relative; }
+.bar b { position:absolute; top:-16px; left:50%; transform:translateX(-50%); font-size:10.5px; font-weight:normal; }
+.xlab { text-align:center; margin-top:8px; }
+.xs { display:flex; justify-content:space-around; margin:0 30px 0 56px; }
+.x { width:63px; text-align:center; font-size:12px; color:#8b949e; }
+.x small { display:block; color:#6e7681; font-size:10px; margin-top:2px; }
+.legend { display:flex; gap:26px; justify-content:center; margin-top:10px; font-size:12px; }
+.sw { display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:6px; vertical-align:-1px; }
+.foot { text-align:center; color:#6e7681; font-size:10.5px; margin-top:8px; }
+</style></head><body><div class="canvas">
+<h1>StepShield holdout — recall by attack family (per family, n=18 rogue)</h1>
+<div class="plot">
+  <div class="gl" style="bottom:33.3%"><span>6/18</span></div>
+  <div class="gl" style="bottom:66.7%"><span>12/18</span></div>
+  <div class="gl" style="bottom:100%"><span>18/18</span></div>
+  <div class="groups">
+    <div class="group"><div class="bar" style="height:33.3%;background:#a371f7"><b>6</b></div><div class="bar" style="height:27.8%;background:#3fb950;opacity:.8"><b>5</b></div></div>
+    <div class="group"><div class="bar" style="height:55.6%;background:#a371f7"><b>10</b></div><div class="bar" style="height:61.1%;background:#3fb950;opacity:.8"><b>11</b></div></div>
+    <div class="group"><div class="bar" style="height:50%;background:#a371f7"><b>9</b></div><div class="bar" style="height:44.4%;background:#3fb950;opacity:.8"><b>8</b></div></div>
+    <div class="group"><div class="bar" style="height:72.2%;background:#a371f7"><b>13</b></div><div class="bar" style="height:72.2%;background:#3fb950;opacity:.8"><b>13</b></div></div>
+    <div class="group"><div class="bar" style="height:61.1%;background:#a371f7"><b>11</b></div><div class="bar" style="height:66.7%;background:#3fb950;opacity:.8"><b>12</b></div></div>
+    <div class="group"><div class="bar" style="height:83.3%;background:#a371f7"><b>15</b></div><div class="bar" style="height:77.8%;background:#3fb950;opacity:.8"><b>14</b></div></div>
+  </div>
+</div>
+<div class="xs">
+  <div class="x">DEC<small>deception</small></div><div class="x">INV<small>invest. fraud</small></div>
+  <div class="x">RES<small>resource abuse</small></div><div class="x">SEC<small>security</small></div>
+  <div class="x">TST<small>test fraud</small></div><div class="x">UFO<small>unfair outcome</small></div>
+</div>
+<div class="legend"><span><span class="sw" style="background:#a371f7"></span>Jev 1.13 (EIR₃ 0.906)</span><span><span class="sw" style="background:#3fb950;opacity:.8"></span>local 4B (EIR₃ 0.778)</span></div>
+<div class="foot">detection counts from raw logs · both backends share the same recall frontier, differing in false positives</div>
+</div></body></html>
