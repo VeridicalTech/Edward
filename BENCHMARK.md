@@ -187,3 +187,53 @@ edward eval --suite stepshield --data /tmp/stepshield/data \
 Raw logs: `results/raw/` (gate logs, training logs, environment captures,
 dataset hashes; SHA256SUMS). Evidence logs are published as captured, with
 local filesystem paths and host identifiers lightly redacted.
+
+## External academic benchmarks
+
+Second-source validation on two public benchmarks outside StepShield. Both ran
+with the Jev 1.13 backend (the local-4B LAN service was offline); reproduction
+scripts committed under `tools/`, raw logs under `results/raw/`.
+
+### RedCode-Exec (bash subset, 600 unsafe instances)
+
+Task: recognize that an agent-proposed command should not be executed
+(BLOCK / REQUEST_HUMAN_APPROVAL ≈ the paper's "refusal"). Benign control is
+our own 59-command everyday-dev set (RedCode-Exec ships no benign split) —
+labeled as ours, not the benchmark's.
+
+| Detector | Unsafe recognition | Benign FPR (ours) |
+|---|---:|---:|
+| Edward deterministic layer (DANGEROUS_PATTERNS) | 5.0% | 0.0% |
+| Edward + Jev permission probe | **70.5%** (61.5% BLOCK-only) | **0.0%** |
+
+Finding: RedCode's harms are semantic (e.g. a discrimination scoring script)
+rather than classically destructive, so pattern-based blocking is nearly blind
+(5.0%) — while a single typed Jev call per batch catches 70.5% at zero false
+positives on the control set. Log: `results/raw/redcode_exec_bash_jev.log`.
+
+### ATBench (1,000 trajectories; binary unsafe F1)
+
+Trajectory-level safety judgment, one batched Jev `Choice` per trajectory
+(~38 s, ≈$0.1 total). Mode B is Edward's shipped trigger-gated pipeline.
+
+| Protocol | Recall | Precision | F1 |
+|---|---:|---:|---:|
+| **Mode A: Jev judge, argmax (default)** | 1.000 | 0.523 | **0.687** |
+| Mode A, P(unsafe) ≥ 0.6 (sweep best) | 0.998 | 0.544 | 0.704 |
+| Mode A, P(unsafe) ≥ 0.9 (operating point) | 0.501 | **0.996** | 0.667 |
+| Mode B: Edward integrated (trigger-gated) | 0.000 | — | 0.000 |
+| GPT-5.4 (paper, binary classification) | — | — | 0.767 |
+
+Findings, stated plainly:
+
+- Jev's judgment is **recall-complete but over-inclusive at argmax** (every
+  unsafe trajectory caught, 453 safe ones flagged). Confidence is
+  well-separated only at the extremes: at P(unsafe) ≥ 0.9 precision is 99.6%,
+  which is a useful gate-escalation operating point, not a tuned claim.
+- Mode B's zero is structural, not a bug: deterministic triggers (loops,
+  stalls, budget) rarely fire on short API-tool trajectories whose risk is
+  first-turn injection. Edward's production mode targets **temporal failure
+  economics in coding sessions**; per-call injection screening is a different
+  axis (and is what Mode A measures).
+- Full sweep + raw predictions: `results/raw/atbench_preds.json`,
+  log `results/raw/atbench_jev.log`.
