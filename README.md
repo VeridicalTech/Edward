@@ -2,7 +2,9 @@
 
 # Edward
 
-**An external control plane for AI coding agents — deterministic guardrails, a local semantic scorer, and interventions you can resume.**
+**The supervisor for coding agents that run when nobody's watching.**
+
+CI jobs, overnight runs, scheduled batches — unattended agents fail quietly: the same broken test retried 40 times, `rm -rf` on the wrong directory, budget burned at 3am with no one to hit stop. Edward watches the event stream, builds a picture of what the agent is actually doing across turns, and intervenes when the picture stops looking right — **PAUSE (resumable), CANCEL, or BLOCK — with a signed receipt for every decision.**
 
 [![CI](https://img.shields.io/github/actions/workflow/status/VeridicalTech/Edward/ci.yml?branch=main&label=CI&style=flat-square&logo=github)](https://github.com/VeridicalTech/Edward/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/edward-guard?style=flat-square&color=blue)](https://pypi.org/project/edward-guard/)
@@ -166,6 +168,25 @@ measured numbers and reproduction commands).
 <div align="center">
 <img src="docs/gif/resume_verify.gif" alt="resume from audit + offline receipt verification" width="780">
 </div>
+
+## Unattended runs & CI
+
+Edward is built for agents nobody is watching. In a workflow:
+
+```yaml
+- uses: VeridicalTech/Edward@main
+  with:
+    command: 'pi "fix the flaky test"'
+    policy: balanced          # or a path to your policy TOML
+    max-seconds: 1800
+    # scorer-url: http://gpu-box.lan:8000   # optional local 4B judge
+```
+
+The command runs under supervision. If Edward intervenes — loop, stall,
+budget bleed, dangerous command — **the job fails with a `::warning` and the
+Ed25519 receipt trail is uploaded as an artifact**, so the 3am failure comes
+with evidence instead of a silent $12 bill. `edward verify` runs in-pipeline:
+tampered audit logs fail the build.
 
 ## Why zero dependencies?
 

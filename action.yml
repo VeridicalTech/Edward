@@ -1,0 +1,88 @@
+name: 'Edward — agent supervisor'
+description: >
+  Wrap an unattended coding-agent command with Edward: temporal failure
+  detection (loops, stalls, budget bleed), dangerous-command blocking, and
+  signed receipts. Fails the job if Edward intervenes, and verifies the
+  receipt chain offline.
+branding:
+  icon: 'shield'
+  color: 'green'
+
+inputs:
+  command:
+    description: 'Agent command to supervise, e.g. `pi "fix the flaky test"` (passed through the shell)'
+    required: true
+  policy:
+    description: 'Policy preset (conservative | balanced | aggressive) or path to a policy TOML/JSON'
+    required: false
+    default: 'balanced'
+  max-seconds:
+    description: 'Wall-clock cap for the supervised run'
+    required: false
+    default: '3600'
+  scorer-url:
+    description: 'Optional scorer endpoint (e.g. your LAN 4B, OpenAI-compatible /v1/score). Empty = deterministic rules only.'
+    required: false
+    default: ''
+  upload-audit:
+    description: 'Upload audit.jsonl + receipts.jsonl as workflow artifacts'
+    required: false
+    default: 'true'
+  edward-version:
+    description: 'edward-guard requirement to install'
+    required: false
+    default: 'edward-guard>=0.3.0'
+
+outputs:
+  outcome:
+    description: 'clean | paused | terminated | error'
+  audit-path:
+    description: 'Path to the audit JSONL produced by the run'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install Edward
+      shell: bash
+      run: |
+        python3 -m pip install --quiet --upgrade "${{ inputs.edward-version }}"
+        edward --version
+
+    - name: Supervise the agent
+      id: run
+      shell: bash
+      env:
+        EDWARD_SCORER_URL: ${{ inputs.scorer-url }}
+      run: |
+        set +e
+        edward wrap --policy "${{ inputs.policy }}" \
+          --max-seconds "${{ inputs.max-seconds }}" \
+          -- ${{ inputs.command }}
+        code=$?
+        case $code in
+          0)  outcome="clean" ;;
+          75) outcome="paused" ;;
+          76) outcome="terminated" ;;
+          *)  outcome="error" ;;
+        esac
+        echo "outcome=$outcome" >> "$GITHUB_OUTPUT"
+        echo "audit-path=$HOME/.edward/audit.jsonl" >> "$GITHUB_OUTPUT"
+        if [ "$outcome" != "clean" ]; then
+          echo "::warning::Edward intervened: $outcome — the agent was stopped before it burned more budget. See the edward-audit artifact for the signed receipt trail."
+          exit 1
+        fi
+
+    - name: Verify receipt chain (tamper-evidence)
+      shell: bash
+      run: |
+        if [ -f "$HOME/.edward/receipts.jsonl" ]; then
+          edward verify "$HOME/.edward/audit.jsonl" "$HOME/.edward/receipts.jsonl"
+        fi
+
+    - name: Upload audit trail
+      if: ${{ inputs.upload-audit == 'true' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: edward-audit
+        path: ~/.edward/audit.jsonl
+        if-no-files-found: ignore
