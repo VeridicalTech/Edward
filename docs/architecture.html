@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<!-- Architecture diagram source. Layout by CSS, wires drawn by JS from measured
+     DOM rects. Render: chromium --headless --screenshot (see tools/render_arch.sh) -->
+<html><head><meta charset="utf-8"><style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { width: 960px; height: 470px; background: #0d1117; color: #e6edf3;
+         font-family: 'Fira Mono','Fira Code','DejaVu Sans Mono',Menlo,Consolas,monospace;
+         font-size: 12px; }
+  .canvas { position: relative; width: 960px; height: 470px; padding: 14px 16px; }
+  h1 { font-size: 17px; text-align: center; margin-bottom: 12px; font-weight: bold; }
+  .grid { display: grid; grid-template-columns: 240px 1fr 270px; gap: 26px; align-items: stretch; }
+  .card { background: #161b22; border: 2px solid #30363d; border-radius: 12px; padding: 12px 14px; }
+  .card h2 { font-size: 14px; margin-bottom: 4px; }
+  .sub { color: #8b949e; font-size: 11.5px; line-height: 1.55; }
+  .divider { border-top: 1px solid #21262d; margin: 10px 0; }
+  .chip { color: #6e7681; font-size: 11px; line-height: 1.6; }
+  #plane { border-color: #3fb950; display: flex; flex-direction: column; gap: 8px; }
+  #plane h2 { color: #3fb950; text-align: center; margin-bottom: 2px; }
+  .node { background: #0d1117; border: 1.5px solid #30363d; border-radius: 8px;
+          padding: 8px 10px; text-align: center; }
+  .node .t { font-size: 12.5px; }
+  .node .s { color: #8b949e; font-size: 10.5px; margin-top: 3px; line-height: 1.45; }
+  .node.red { border-color: #f85149; } .node.red .t { color: #f85149; }
+  .node.purple { border-color: #a371f7; } .node.purple .t { color: #a371f7; }
+  .down { text-align: center; color: #30363d; font-size: 12px; line-height: 0.6; }
+  .out { margin-bottom: 14px; }
+  .out .t { font-size: 13px; font-weight: bold; }
+  .ok { border-color: #3fb950; } .ok .t { color: #3fb950; }
+  .warn { border-color: #a371f7; } .warn .t { color: #a371f7; }
+  .kill { border-color: #f85149; } .kill .t { color: #f85149; }
+  .strip { position: absolute; left: 16px; right: 16px; bottom: 14px;
+           background: #161b22; border: 2px solid #30363d; border-radius: 10px;
+           text-align: center; padding: 9px 10px; font-size: 12px; }
+  .strip .ok { color: #3fb950; }
+  #wires { position: absolute; inset: 0; pointer-events: none; }
+  .lbl { fill: #8b949e; font-size: 10.5px; }
+</style></head>
+<body>
+<div class="canvas">
+  <h1>How Edward watches an agent</h1>
+  <svg id="wires"></svg>
+  <div class="grid">
+    <div class="card" data-node="agent">
+      <h2 style="text-align:center">Agent</h2>
+      <div class="sub" style="text-align:center">Pi · Codex · claude -p ·<br>any CLI / CI job / script</div>
+      <div class="divider"></div>
+      <div class="sub" style="text-align:center">emits</div>
+      <div class="sub" style="text-align:center">tool calls · errors ·<br>token counts · output</div>
+      <div class="divider"></div>
+      <div class="sub" style="text-align:center;color:#3fb950">$ edward wrap -- …</div>
+      <div class="chip" style="text-align:center">adapter: auto | pi | generic<br>+ entry-point plugins</div>
+    </div>
+    <div class="card" id="plane">
+      <h2>Edward control plane</h2>
+      <div class="node" data-node="state">
+        <div class="t">StateEngine — cross-turn state</div>
+        <div class="s">error trends · write streaks · budget · elapsed</div>
+      </div>
+      <div class="down">▼</div>
+      <div class="node red" data-node="trig">
+        <div class="t">deterministic triggers (8, frozen)</div>
+        <div class="s">dangerous cmd · scope · loop · stall · budget</div>
+      </div>
+      <div class="down">▼</div>
+      <div class="node purple" data-node="scorer">
+        <div class="t">scorer backend (advisory)</div>
+        <div class="s">endpoint (LAN 4B) | jev (batched) | heuristic</div>
+      </div>
+      <div class="down">▼</div>
+      <div class="node" data-node="kernel">
+        <div class="t">kernel resolves → PAUSE / CANCEL / BLOCK</div>
+      </div>
+    </div>
+    <div>
+      <div class="card out ok" data-node="pause">
+        <div class="t">PAUSE — resumable</div>
+        <div class="sub">exit 75 · pinned session<br>edward wrap --continue</div>
+      </div>
+      <div class="card out warn" data-node="approve">
+        <div class="t">approval loop (optional)</div>
+        <div class="sub">Slack / stderr: Resume / Kill</div>
+      </div>
+      <div class="card out kill" data-node="kill">
+        <div class="t">CANCEL / BLOCK</div>
+        <div class="sub">full process-tree terminate<br>dangerous commands: no LLM,<br>no override</div>
+      </div>
+    </div>
+  </div>
+  <div class="strip" data-node="strip">every decision → Ed25519-signed receipt chain (audit.jsonl) →
+    <span class="ok">edward verify</span> proves tamper-evidence offline</div>
+</div>
+<script>
+const svg = document.getElementById('wires');
+svg.setAttribute('width', 960); svg.setAttribute('height', 470);
+svg.setAttribute('viewBox', '0 0 960 470');
+function rect(id){ const r = document.querySelector(`[data-node="${id}"]`).getBoundingClientRect();
+  return {l:r.left+window.scrollX, r:r.right+window.scrollX, t:r.top+window.scrollY, b:r.bottom+window.scrollY,
+          cx:r.left+window.scrollX+r.width/2, cy:r.top+window.scrollY+r.height/2}; }
+function arrow(a, b, color, dash, fromEdge='r', toEdge='l'){
+  const A = rect(a), B = rect(b);
+  const x1 = fromEdge==='r'? A.r : A.cx, y1 = fromEdge==='r'? A.cy : A.b;
+  const x2 = toEdge==='l'? B.l : B.cx,  y2 = toEdge==='l'? B.cy : B.t;
+  const line = `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${color}" stroke-width="2" ${dash?'stroke-dasharray="5 4"':''}/>`;
+  const ang = Math.atan2(y2-y1, x2-x1), ah=9;
+  const p1 = `${x2},${y2}`, p2 = `${x2-ah*Math.cos(ang-0.42)},${y2-ah*Math.sin(ang-0.42)}`, p3 = `${x2-ah*Math.cos(ang+0.42)},${y2-ah*Math.sin(ang+0.42)}`;
+  svg.innerHTML += line + `<polygon points="${p1} ${p2} ${p3}" fill="${color}"/>`;
+  return {x1,y1,x2,y2};
+}
+arrow('agent','plane','#3fb950');
+arrow('agent','state','#3fb950');
+// outcomes from plane's right edge at each target's vertical center
+arrow('plane','pause','#3fb950');
+arrow('plane','approve','#a371f7',true);
+arrow('plane','kill','#f85149');
+// labels
+const L = [];
+function lbl(x,y,txt,anchor){ L.push(`<text class="lbl" x="${x}" y="${y-6}" text-anchor="${anchor||'middle'}">${txt}</text>`); }
+svg.innerHTML += L.join('');
+</script>
+</body></html>

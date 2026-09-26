@@ -31,7 +31,7 @@ Agents fail quietly. They retry the same broken test 40 times, burn $8 in tokens
 Edward sits **between the agent and its runtime**. It watches the event stream, builds a picture of what the agent is actually doing across turns, and intervenes when the picture stops looking right.
 
 <div align="center">
-<img src="docs/architecture.svg" alt="Edward architecture: agent events → cross-turn state → deterministic triggers → advisory scorer → kernel decision → signed receipts" width="880">
+<img src="docs/architecture.png" alt="Edward architecture: agent events → cross-turn state → deterministic triggers → advisory scorer → kernel decision → signed receipts" width="880">
 </div>
 
 ## Why not just if/else?
