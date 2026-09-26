@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="940" height="430" viewBox="0 0 940 430" font-family="'Fira Mono','Fira Code','DejaVu Sans Mono',Menlo,Consolas,monospace">
+  <rect width="100%" height="100%" fill="#0d1117"/>
+  <text x="470" y="30" font-size="17" fill="#e6edf3" text-anchor="middle" font-weight="bold">How Edward watches an agent</text>
+
+  <!-- agent box -->
+  <rect x="30" y="80" width="200" height="270" rx="14" fill="#161b22" stroke="#30363d" stroke-width="2"/>
+  <text x="130" y="112" font-size="15" fill="#e6edf3" text-anchor="middle" font-weight="bold">Agent</text>
+  <text x="130" y="136" font-size="12" fill="#8b949e" text-anchor="middle">Pi · Codex · claude -p ·</text>
+  <text x="130" y="154" font-size="12" fill="#8b949e" text-anchor="middle">any CLI / CI job / script</text>
+  <line x1="50" y1="172" x2="210" y2="172" stroke="#21262d"/>
+  <text x="130" y="196" font-size="11.5" fill="#6e7681" text-anchor="middle">emits</text>
+  <text x="130" y="220" font-size="12.5" fill="#e6edf3" text-anchor="middle">tool calls · errors ·</text>
+  <text x="130" y="240" font-size="12.5" fill="#e6edf3" text-anchor="middle">token counts · output</text>
+  <text x="130" y="282" font-size="11.5" fill="#3fb950" text-anchor="middle">$ edward wrap -- …</text>
+  <text x="130" y="304" font-size="11.5" fill="#6e7681" text-anchor="middle">adapter: auto | pi | generic</text>
+  <text x="130" y="322" font-size="11.5" fill="#6e7681" text-anchor="middle">+ entry-point plugins</text>
+
+  <!-- arrow: events -->
+  <line x1="230" y1="215" x2="300" y2="215" stroke="#3fb950" stroke-width="2"/>
+  <polygon points="300,215 288,209 288,221" fill="#3fb950"/>
+  <text x="265" y="202" font-size="11" fill="#8b949e" text-anchor="middle">events</text>
+
+  <!-- control plane box -->
+  <rect x="300" y="80" width="330" height="270" rx="14" fill="#161b22" stroke="#3fb950" stroke-width="2"/>
+  <text x="465" y="108" font-size="15" fill="#3fb950" text-anchor="middle" font-weight="bold">Edward control plane</text>
+
+  <rect x="322" y="126" width="286" height="44" rx="8" fill="#0d1117" stroke="#30363d"/>
+  <text x="465" y="144" font-size="12.5" fill="#e6edf3" text-anchor="middle">StateEngine — cross-turn state</text>
+  <text x="465" y="161" font-size="11" fill="#8b949e" text-anchor="middle">error trends · write streaks · budget · elapsed</text>
+
+  <line x1="465" y1="170" x2="465" y2="186" stroke="#30363d"/>
+  <polygon points="465,186 460,178 470,178" fill="#30363d"/>
+
+  <rect x="322" y="186" width="286" height="40" rx="8" fill="#0d1117" stroke="#f85149"/>
+  <text x="465" y="203" font-size="12.5" fill="#f85149" text-anchor="middle">deterministic triggers (8, frozen)</text>
+  <text x="465" y="219" font-size="11" fill="#8b949e" text-anchor="middle">dangerous cmd · scope · loop · stall · budget</text>
+
+  <line x1="465" y1="226" x2="465" y2="242" stroke="#30363d"/>
+  <polygon points="465,242 460,234 470,234" fill="#30363d"/>
+
+  <rect x="322" y="242" width="286" height="44" rx="8" fill="#0d1117" stroke="#a371f7"/>
+  <text x="465" y="260" font-size="12.5" fill="#a371f7" text-anchor="middle">scorer backend (advisory)</text>
+  <text x="465" y="277" font-size="11" fill="#8b949e" text-anchor="middle">endpoint (LAN 4B) | jev (batched) | heuristic</text>
+
+  <rect x="322" y="298" width="286" height="36" rx="8" fill="#0d1117" stroke="#30363d"/>
+  <text x="465" y="321" font-size="12" fill="#e6edf3" text-anchor="middle">kernel resolves → PAUSE / CANCEL / BLOCK</text>
+
+  <!-- arrows to outcomes -->
+  <line x1="630" y1="160" x2="700" y2="150" stroke="#3fb950" stroke-width="2"/>
+  <polygon points="700,150 689,146 690,157" fill="#3fb950"/>
+  <line x1="630" y1="264" x2="700" y2="258" stroke="#a371f7" stroke-width="2" stroke-dasharray="4 3"/>
+  <line x1="630" y1="316" x2="700" y2="330" stroke="#f85149" stroke-width="2"/>
+  <polygon points="700,330 689,325 690,336" fill="#f85149"/>
+
+  <!-- outcomes -->
+  <rect x="700" y="96" width="212" height="76" rx="10" fill="#161b22" stroke="#3fb950"/>
+  <text x="806" y="120" font-size="13" fill="#3fb950" text-anchor="middle" font-weight="bold">PAUSE — resumable</text>
+  <text x="806" y="140" font-size="11.5" fill="#8b949e" text-anchor="middle">exit 75 · pinned session</text>
+  <text x="806" y="158" font-size="11.5" fill="#8b949e" text-anchor="middle">edward wrap --continue</text>
+
+  <rect x="700" y="184" width="212" height="58" rx="10" fill="#161b22" stroke="#a371f7"/>
+  <text x="806" y="207" font-size="12.5" fill="#a371f7" text-anchor="middle">approval loop (optional)</text>
+  <text x="806" y="226" font-size="11.5" fill="#8b949e" text-anchor="middle">Slack / stderr: Resume / Kill</text>
+
+  <rect x="700" y="254" width="212" height="96" rx="10" fill="#161b22" stroke="#f85149"/>
+  <text x="806" y="278" font-size="13" fill="#f85149" text-anchor="middle" font-weight="bold">CANCEL / BLOCK</text>
+  <text x="806" y="298" font-size="11.5" fill="#8b949e" text-anchor="middle">full process-tree terminate</text>
+  <text x="806" y="316" font-size="11.5" fill="#8b949e" text-anchor="middle">dangerous commands: no LLM,</text>
+  <text x="806" y="333" font-size="11.5" fill="#8b949e" text-anchor="middle">no override</text>
+
+  <!-- receipt strip -->
+  <rect x="30" y="376" width="882" height="40" rx="10" fill="#161b22" stroke="#30363d"/>
+  <text x="470" y="401" font-size="12.5" fill="#e6edf3" text-anchor="middle">every decision → Ed25519-signed receipt chain (audit.jsonl) → <tspan fill="#3fb950">edward verify</tspan> proves tamper-evidence offline</text>
+</svg>

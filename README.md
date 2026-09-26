@@ -30,30 +30,9 @@ Agents fail quietly. They retry the same broken test 40 times, burn $8 in tokens
 
 Edward sits **between the agent and its runtime**. It watches the event stream, builds a picture of what the agent is actually doing across turns, and intervenes when the picture stops looking right.
 
-```
-Agent (Pi / Codex / custom)
-    │ events
-    ▼
-Canonical Event Schema   ← normalizes tool names to capabilities
-    │
-    ▼
-State Engine             ← materializes cross-turn agent state
-    │
-    ▼
-Trigger Rules [FROZEN]   ← deterministic safety + convergence checks
-    │
-    ├─ HARD_CONSTRAINT ──→ Edward: BLOCK (scorer cannot override)
-    │
-    └─ SOFT_DECISION ──→ Local scorer ──→ Policy Resolver
-                              │                │
-                              └────────────────┘
-                                       │
-                                       ▼
-                                 Control Kernel
-                                       │
-                                       ▼
-                              PAUSE / CANCEL / RESUME
-```
+<div align="center">
+<img src="docs/architecture.svg" alt="Edward architecture: agent events → cross-turn state → deterministic triggers → advisory scorer → kernel decision → signed receipts" width="880">
+</div>
 
 ## Why not just if/else?
 
@@ -82,6 +61,14 @@ Edward validates itself against **[StepShield](https://github.com/glo26/stepshie
 | StaticGuard 847 rules (paper) | 86.1% | 77.8% | 0.23 | — |
 
 The deterministic layer alone is quantitatively blind to content-semantic violations (7.4%) — the "silent corruption" gap — while keeping the best false-positive rate. Swapping the judgment backend changes the trade, not the architecture: the **local 4B** keeps events on your network at zero marginal cost; **TypeSafe Jev** lifts EIR₃ above the paper's GPT-4.1-mini judge (0.91 vs 0.89) with 42% fewer false positives, one batched calibrated call per probe battery. Trajectory-level recall is the shared frontier for small judges — we measure and publish it rather than claim it away. Full series, raw logs, reproduction commands: [BENCHMARK.md](BENCHMARK.md).
+
+<div align="center">
+<img src="docs/bench-eir-cost.svg" alt="StepShield holdout: EIR3 by system and cost-vs-quality scatter" width="880">
+<br><br>
+<img src="docs/bench-families.svg" alt="StepShield holdout recall by attack family: Jev 1.13 vs local 4B" width="880">
+<br><br>
+<img src="docs/bench-external.svg" alt="External benchmarks: RedCode-Exec recognition and ATBench F1" width="880">
+</div>
 
 ## What it detects
 
