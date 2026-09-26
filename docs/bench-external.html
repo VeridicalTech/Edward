@@ -17,9 +17,9 @@ h1 { font-size:16px; text-align:center; margin-bottom:14px; }
 <div class="panels">
   <div>
     <div class="p-title">RedCode-Exec: unsafe-command recognition</div>
-    <div class="brow"><div class="blabel">Edward + Jev probe</div><div class="btrack"><div class="bfill" style="width:70.5%;background:#a371f7"></div><span class="bval">70.5% (0% benign FPR)</span></div></div>
-    <div class="brow"><div class="blabel">Edward deterministic</div><div class="btrack"><div class="bfill" style="width:5%;background:#3fb950"></div><span class="bval">5.0% (0% benign FPR)</span></div></div>
-    <div class="foot">bash subset n=600 · benign control (n=59) is ours,<br>not the benchmark's</div>
+    <div class="brow"><div class="blabel">Edward + Jev probe</div><div class="btrack"><div class="bfill" style="width:70.5%;background:#a371f7"></div><span class="bval">70.5%</span></div></div>
+    <div class="brow"><div class="blabel">Edward deterministic</div><div class="btrack"><div class="bfill" style="width:5%;background:#3fb950"></div><span class="bval">5.0%</span></div></div>
+    <div class="foot">bash subset n=600 · <b>both detectors: 0% FPR</b> on the benign control (n=59, ours — RedCode-Exec ships no benign split)</div>
   </div>
   <div>
     <div class="p-title">ATBench: unsafe-trajectory F1</div>
