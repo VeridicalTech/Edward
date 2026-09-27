@@ -221,6 +221,21 @@ deploy/                team-LAN deployment templates
 - [ ] Robustness suite as `edward eval --suite robustness`
 - [ ] Cloud fleet console (team tier)
 
+## Ecosystem
+
+- [JevTree](https://github.com/Chuf-H/jev-tree) — Jev-native probability-tree
+  planner for multi-step decisions. Complementary layers: JevTree reasons
+  about *which path to take* (candidate expansion, Pareto selection over
+  utility, probability, risk and reversibility); Edward supervises *whether
+  the executed path stays safe, in-scope, and convergent* (hard constraints,
+  semantic risk, pause/resume, signed receipts). A natural integration:
+  JevTree expands and scores candidates → Edward gates them → JevTree selects
+  → Edward supervises execution → receipts feed the replan.
+
+Building a Jev-ecosystem tool that touches agent execution? Edward's adapter
+registry (`edward.adapters` entry points) and scorer backends are designed as
+extension points — open an issue.
+
 ## Contributing
 
 Deterministic layer stays deterministic: trigger defaults are FROZEN, and
