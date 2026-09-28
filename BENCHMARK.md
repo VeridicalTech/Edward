@@ -108,6 +108,27 @@ EDWARD_SCORER_BACKEND=jev TYPESAFE_API_KEY=... \
   python3 tools/bench_jev_holdout.py
 ```
 
+### Pareto intervention selection — neutral result, reported as measured
+
+The JevTree-inspired multi-candidate path (`pareto_intervention=true`: one
+batched call scoring recovery probability for continue/pause/cancel plus risk
+of inaction, kernel composes least-severe-recovering) was benchmarked on the
+same holdout:
+
+| config | Recall | FPR | Precision | EIR₃ | premature |
+|---|---:|---:|---:|---:|---:|
+| legacy single-question | 59.3% | 10.2% | 85.3% | **0.906** | 6 |
+| Pareto multi-candidate | 60.2% | 11.1% | 84.4% | 0.892 | 7 |
+
+All deltas sit inside ±1 trajectory — a wash on this benchmark. The likely
+reason: StepShield's rogue/clean labels are unambiguous, so the one-step
+question already carries the decision; Pareto selection pays off on
+*ambiguous* distributions, which curated benchmarks rarely contain. The flag
+stays **off by default** (this measurement is why), the mechanism stays
+available for real-world ambiguity, and raw logs are published:
+`results/raw/stepshield_contract_v1b_jev_pareto.log`,
+repro `python3 tools/bench_jev_holdout_pareto.py`.
+
 ## Fine-tune experiment — strikes 1–2, abandoned
 
 The scorer was fine-tuned (LoRA SFT on Qwen3.5-4B) to lift recall. Per the
