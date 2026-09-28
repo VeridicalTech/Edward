@@ -39,6 +39,29 @@ class ControlKernel:
             return rule_action, f"rule (jev said CONTINUE at conf {jev_confidence:.2f}; disagreement -> conservative)"
         return jev_action, f"jev (conf {jev_confidence:.2f})"
 
+    @staticmethod
+    def resolve_pareto(scores: dict) -> tuple:
+        """Compose a Pareto-evaluated intervention (deterministic; the scorer
+        supplies probabilities, code owns thresholds and severity ordering).
+
+        - risk of inaction < 0.6: continue when recovery is likely, else the
+          conservative PAUSE;
+        - risk >= 0.6: the least-severe action whose recovery probability
+          holds up (>= 0.5); if none recovers, safety-first CANCEL.
+        """
+        rec = scores.get("recover", {})
+        risk = scores.get("risk_inaction", 0.0) or 0.0
+        def rp(a):
+            return rec.get(a, 0.0) or 0.0
+        if risk < 0.6:
+            if rp("continue") >= 0.5:
+                return "CONTINUE", f"pareto (risk {risk:.2f} < 0.6; recovery likely)"
+            return "PAUSE", f"pareto (risk {risk:.2f} < 0.6; recovery unlikely — conservative)"
+        for a in ("CONTINUE", "PAUSE", "CANCEL"):
+            if rp(a.lower()) >= 0.5:
+                return a, f"pareto (risk {risk:.2f}; least-severe recovering action)"
+        return "CANCEL", f"pareto (risk {risk:.2f}; no candidate recovers — safety first)"
+
     def execute(self, decision: dict, mss: dict) -> str:
         rule_action = decision.get("rule_action", "CONTINUE")
         authority = decision.get("authority", DecisionAuthority.SOFT_DECISION)

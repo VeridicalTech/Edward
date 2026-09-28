@@ -38,13 +38,15 @@ TERMINAL_ACTIONS = {"CANCEL", "ESCALATE", "BLOCK", "REQUEST_HUMAN_APPROVAL"}
 class ControlPlane:
     def __init__(self, policy, session: str = "", audit: Optional[AuditLog] = None,
                  scorer: Optional[Scorer] = None, log: Optional[Callable[[str], None]] = None,
-                 clock: Optional[Callable[[], float]] = None):
+                 clock: Optional[Callable[[], float]] = None,
+                 done_checker: Optional[Callable[[], tuple]] = None):
         self.policy = policy
         self.session = session
         self.audit = audit
         self.scorer = scorer
         self.log = log or (lambda msg: None)
         self.clock = clock or time.time
+        self.done_checker = done_checker
         self.state_engine = StateEngine(token_budget=policy.token_budget,
                                         clock=self.clock if clock else None)
         if policy.allowed_paths:
@@ -84,6 +86,24 @@ class ControlPlane:
         self._last_fired = now
         mss = self.state_engine.state.to_mss()
 
+        # Verification-gated convergence (JevTree's terminal-verifier idea):
+        # a passing done check suppresses the premature-PAUSE; a failing one
+        # becomes evidence in the reason instead of silently firing.
+        if (self.done_checker is not None
+                and trigger.reason.startswith("Convergence stall")):
+            try:
+                passed, detail = self.done_checker()
+            except Exception as exc:
+                passed, detail = False, f"checker error: {exc}"
+            if passed:
+                if self.audit:
+                    self.audit.emit("done_verified", session=self.session, detail=detail)
+                return None
+            trigger = TriggerResult(should_fire=True,
+                                    decision_type=trigger.decision_type,
+                                    reason=f"{trigger.reason} — done check FAILED: {detail}")
+
+        decision = None
         if trigger.decision_type == "request_permission":
             decision = Decision(
                 action="REQUEST_HUMAN_APPROVAL", source="hard_constraint",
@@ -103,18 +123,30 @@ class ControlPlane:
                 # action stands, and the audit trail records the unresolved
                 # consultation instead of silently dropping it.
                 jev_result = {"unresolved": "scorer_unavailable"}
-            decision_dict = {
-                "rule_action": "PAUSE",
-                "jev_action": (jev_result or {}).get("choice"),
-                "jev_confidence": (jev_result or {}).get("confidence", 0.0),
-                "authority": DecisionAuthority.SOFT_DECISION,
-            }
-            action, source = ControlKernel.resolve_action(decision_dict)
-            decision = Decision(
-                action=action, source=source, authority="soft_decision",
-                decision_type=trigger.decision_type, reason=trigger.reason,
-                trigger=trigger, jev=jev_result,
-            )
+            if self.policy.pareto_intervention and self.scorer is not None:
+                pareto = self.scorer.consult_pareto(mss, trigger.reason)
+                if pareto is not None:
+                    p_action, p_source = ControlKernel.resolve_pareto(pareto)
+                    decision = Decision(
+                        action=p_action, source=p_source, authority="soft_decision",
+                        decision_type=trigger.decision_type, reason=trigger.reason,
+                        trigger=trigger, jev=pareto,
+                    )
+                else:
+                    jev_result = {"unresolved": "scorer_unavailable"}
+            if decision is None:
+                decision_dict = {
+                    "rule_action": "PAUSE",
+                    "jev_action": (jev_result or {}).get("choice"),
+                    "jev_confidence": (jev_result or {}).get("confidence", 0.0),
+                    "authority": DecisionAuthority.SOFT_DECISION,
+                }
+                action, source = ControlKernel.resolve_action(decision_dict)
+                decision = Decision(
+                    action=action, source=source, authority="soft_decision",
+                    decision_type=trigger.decision_type, reason=trigger.reason,
+                    trigger=trigger, jev=jev_result,
+                )
 
         self.interventions += 1
         if self.audit:
@@ -145,6 +177,14 @@ class ControlPlane:
             text = f"[edward] {decision.action}: {decision.reason} (source: {decision.source})"
             if not notify_webhook(self.policy.webhook_url, text):
                 self.log("webhook notification failed (ignored)")
+
+    def coverage(self) -> dict:
+        """What did the guard actually see? (JevTree's unresolved-mass idea,
+        applied to audit coverage.)"""
+        s = self.scorer
+        return {"tool_calls_seen": self.state.total_tool_calls,
+                "scorer_consultations": (s.total_calls if s else 0),
+                "scorer_failures": (s.total_failures if s else 0)}
 
     def summary(self) -> dict:
         s = self.state

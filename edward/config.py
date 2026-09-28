@@ -58,10 +58,12 @@ TRIGGER_TYPES = {
 KNOWN_TOP_KEYS = {
     "preset", "token_budget", "token_price_usd_per_1m", "allowed_paths",
     "session_dir", "triggers", "scorer", "notify", "intervention",
+    "done_checks", "pareto_intervention",
 }
 KNOWN_TOP_KEYS = {
     "preset", "token_budget", "token_price_usd_per_1m", "allowed_paths",
     "session_dir", "triggers", "scorer", "notify", "intervention", "receipts",
+    "done_checks", "pareto_intervention",
 }
 KNOWN_NESTED = {
     "scorer": {"base_url": "scorer_base_url", "enabled": "scorer_enabled",
@@ -102,6 +104,8 @@ class Policy:
     approval_port: int = 8765
     receipts_enabled: bool = True
     wait_approval_seconds: int = 0
+    done_checks: list = field(default_factory=list)
+    pareto_intervention: bool = False
 
 
 def _warn(msg: str) -> None:
@@ -195,6 +199,12 @@ def load_policy(source: str = None) -> Policy:
                     raise PolicyError(f"{source}: token_price_usd_per_1m must be a number, got {value!r}")
             elif key == "session_dir":
                 policy.session_dir = str(value)
+            elif key == "done_checks":
+                if not isinstance(value, list) or not all(isinstance(c, str) for c in value):
+                    raise PolicyError(f"{source}: done_checks must be a list of strings")
+                policy.done_checks = list(value)
+            elif key == "pareto_intervention":
+                policy.pareto_intervention = bool(value)
         else:
             _warn(f"{source}: unknown key '{key}' ignored")
 
@@ -211,6 +221,8 @@ def policy_toml(policy: Policy) -> str:
         f"token_price_usd_per_1m = {policy.token_price_usd_per_1m}",
         f"allowed_paths = {json.dumps(policy.allowed_paths)}",
         f"session_dir = \"{policy.session_dir}\"",
+        f"done_checks = {json.dumps(policy.done_checks)}",
+        f"pareto_intervention = {str(policy.pareto_intervention).lower()}",
         "",
         "[triggers]",
     ]

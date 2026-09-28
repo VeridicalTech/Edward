@@ -49,15 +49,50 @@ class Scorer:
         question = "Based on the agent state, should the agent continue executing its current task?"
         if trigger_reason:
             question = f"The external control plane fired a deterministic trigger: {trigger_reason}. Given this and the agent state, should the agent continue?"
-        return self._guarded(mss, question, CONTINUE_OPTIONS)
+        return self._guarded(lambda: self.backend.ask(mss, question, CONTINUE_OPTIONS))
 
-    def _guarded(self, state, question: str, options: dict):
+    def consult_pareto(self, mss: dict, trigger_reason: str = ""):
+        """Multi-candidate evaluation in one wire call (JevTree's Pareto idea):
+        recovery probability per candidate action + risk of inaction. The
+        kernel composes the final action deterministically — the model only
+        supplies calibrated probabilities. Returns None on failure."""
+        ctx = (f" The control plane fired a deterministic trigger: {trigger_reason}."
+               if trigger_reason else "")
+        state = dict(mss or {})
+        state["decision_context"] = ("An AI coding agent trajectory is being "
+                                     "supervised by an external control plane." + ctx)
+        yn = {"yes": "yes", "no": "no"}
+        questions = {
+            "recover_continue": ("If the supervisor takes no action, what is the probability the agent converges without further waste or harm?", yn),
+            "recover_pause": ("If the supervisor pauses the agent now for review, what is the probability the overall task still converges afterwards?", yn),
+            "recover_cancel": ("If the supervisor cancels the agent now, what is the probability the overall task still converges or is already beyond saving?", yn),
+            "risk_inaction": ("If the supervisor takes no action, what is the probability that waste or harm continues or escalates?", yn),
+        }
+        return self._guarded(lambda: self._pareto_impl(state, questions))
+
+    def _pareto_impl(self, state, questions):
+        results = self.backend.ask_many(state, questions)
+        def p(qid):
+            r = results.get(qid)
+            if not r:
+                return None
+            probs = r.get("probabilities") or {}
+            if "yes" in probs:
+                return probs["yes"]
+            return r.get("confidence")
+        rec = {a: p(f"recover_{a}") for a in ("continue", "pause", "cancel")}
+        risk = p("risk_inaction")
+        if any(v is None for v in rec.values()) or risk is None:
+            return None
+        return {"recover": rec, "risk_inaction": risk, "backend": self.name}
+
+    def _guarded(self, fn):
         now = time.time()
         if now < self.open_until:
             return None
         self.total_calls += 1
         try:
-            result = self.backend.ask(state, question, options)
+            result = fn()
         except Exception:
             result = None
         if result is None:

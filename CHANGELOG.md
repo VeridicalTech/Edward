@@ -5,6 +5,26 @@ All notable changes to Edward are documented here. Format follows
 
 ## [Unreleased]
 
+### Added
+- **Verification-gated convergence (`--done-check`)**: declare shell commands
+  that verify task completion (policy `done_checks` or repeatable CLI flag).
+  A passing check suppresses the convergence-stall PAUSE (recorded as
+  `done_verified` in the audit); a failing one becomes evidence in the
+  intervention reason — premature-done detection comes free. (JevTree's
+  terminal-verifier idea, adapted.)
+- **Pareto intervention selection** (policy `pareto_intervention`, opt-in):
+  when a soft trigger fires, one batched scorer call evaluates recovery
+  probability per candidate action (continue/pause/cancel) plus risk of
+  inaction; the kernel composes deterministically (least-severe recovering
+  action; safety-first CANCEL when nothing recovers). The model supplies
+  calibrated probabilities; code owns thresholds. Off by default until
+  benchmarked on the same holdout.
+- **Scorer coverage audit**: sessions now record `scorer_stats` (tool calls
+  seen vs scorer consultations vs failures) and `edward audit --json` reports
+  a `coverage` block — answering "what did the guard actually see?"
+- `edward mcp-proxy` design sketch posted on issue #3 (transport and
+  enforcement planes specified; implementation to follow).
+
 ## [0.3.0] - 2026-09-23
 
 ### Added

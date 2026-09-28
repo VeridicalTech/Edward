@@ -82,7 +82,8 @@ def summarize(path) -> dict:
         "file": str(path), "sessions": 0, "interventions": 0,
         "by_action": {}, "by_decision_type": {}, "tokens_at_intervention": [],
         "cost_usd_at_intervention": [], "est_avoided_usd": 0.0,
-        "unresolved_interventions": 0,
+        "unresolved_interventions": 0, "done_verified": 0,
+        "coverage": {"tool_calls_seen": 0, "scorer_consultations": 0, "scorer_failures": 0},
         "first_ts": None, "last_ts": None,
     }
     sessions = set()
@@ -119,5 +120,12 @@ def summarize(path) -> dict:
                 jev = rec.get("jev") or {}
                 if isinstance(jev, dict) and jev.get("unresolved"):
                     summary["unresolved_interventions"] += 1
+            elif rec.get("type") == "scorer_stats":
+                cov = summary["coverage"]
+                cov["tool_calls_seen"] += rec.get("tool_calls_seen", 0) or 0
+                cov["scorer_consultations"] += rec.get("scorer_consultations", 0) or 0
+                cov["scorer_failures"] += rec.get("scorer_failures", 0) or 0
+            elif rec.get("type") == "done_verified":
+                summary["done_verified"] += 1
     summary["sessions"] = len(sessions)
     return summary

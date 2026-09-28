@@ -154,6 +154,7 @@ def cmd_wrap(args, cmd) -> int:
             scorer = None
 
     adapter = resolve_adapter(getattr(args, "agent", "auto"), cmd)
+    done_checker = make_done_checker(getattr(args, "done_check", None))
     resumes = 0
     current_cmd = list(cmd)
     outcome = None
@@ -164,7 +165,8 @@ def cmd_wrap(args, cmd) -> int:
                                             ephemeral=ephemeral)
         outcome = _run_under_control(run_cmd, policy, scorer, audit, session_id,
                                      max_seconds=args.max_seconds,
-                                     is_pi=bool(adapter is not None and adapter.matches(run_cmd)))
+                                     is_pi=bool(adapter is not None and adapter.matches(run_cmd)),
+                                     done_checker=done_checker)
         if outcome == EXIT_PAUSED and policy.wait_approval_seconds > 0 \
                 and resumes < MAX_RESUMES and _is_pi_rpc(current_cmd):
             decision = _request_approval(policy, session_id)
@@ -193,16 +195,40 @@ def cmd_wrap(args, cmd) -> int:
     return outcome
 
 
+def make_done_checker(cmds):
+    """Build a completion verifier from --done-check commands (all must pass)."""
+    if not cmds:
+        return None
+    def checker():
+        for c in cmds:
+            try:
+                r = subprocess.run(c, shell=True, capture_output=True, timeout=180)
+            except subprocess.TimeoutExpired:
+                return False, f"done check timed out: {c}"
+            if r.returncode != 0:
+                tail = (r.stdout or b"")[-160:].decode(errors="replace").strip()
+                return False, f"{c} (rc={r.returncode}) {tail}"
+        return True, f"{len(cmds)} passed"
+    return checker
+
+
 def _run_under_control(cmd, policy: Policy, scorer, audit: AuditLog, session: str,
-                       max_seconds=None, is_pi: bool = False) -> int:
+                       max_seconds=None, is_pi: bool = False, done_checker=None) -> int:
     """Run one child process under the control plane; returns the exit code."""
     plane = ControlPlane(policy, session=session, audit=audit,
-                         scorer=scorer, log=log_line)
+                         scorer=scorer, log=log_line, done_checker=done_checker)
     audit.session_start(session=session, policy_preset=policy.preset, command=cmd)
 
-    if is_pi:
-        return _run_pi_rpc(cmd, plane, policy, max_seconds)
-    return _run_generic(cmd, plane, policy, max_seconds)
+    try:
+        if is_pi:
+            return _run_pi_rpc(cmd, plane, policy, max_seconds)
+        return _run_generic(cmd, plane, policy, max_seconds)
+    finally:
+        if audit:
+            try:
+                audit.emit("scorer_stats", session=session, **plane.coverage())
+            except Exception:
+                pass
 
 
 def _handle_decision(plane: ControlPlane, decision, killer, label: str) -> int:
@@ -603,6 +629,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_wrap.add_argument("--no-receipts", action="store_true", help="disable signed receipts")
     p_wrap.add_argument("--continue", dest="continue_session", action="store_true", help="resume the most recently paused session (session id recovered from audit)")
     p_wrap.add_argument("--agent", default="auto", help="agent adapter: auto (default), generic, pi, or a plugin name (entry-point group edward.adapters)")
+    p_wrap.add_argument("--done-check", action="append", metavar="CMD",
+                        help="shell command that verifies task completion; a passing check suppresses the convergence-stall PAUSE, a failing one becomes evidence (repeatable)")
     p_wrap.add_argument("--session", metavar="ID", help="explicit edward session id to resume (with --continue)")
     p_wrap.add_argument("--ephemeral", action="store_true", help="do not persist a resumable pi session (no pause/resume)")
     p_wrap.add_argument("--", dest="cmd", nargs=argparse.REMAINDER, help="agent command to run")
