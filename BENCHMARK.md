@@ -129,6 +129,29 @@ available for real-world ambiguity, and raw logs are published:
 `results/raw/stepshield_contract_v1b_jev_pareto.log`,
 repro `python3 tools/bench_jev_holdout_pareto.py`.
 
+### Prediction-error signal — falsified, reported as measured
+
+Pre-registered hypothesis (JevTree's receding-horizon idea transplanted to
+detection): rolling next-action prediction error separates rogue from clean
+trajectories, sidestepping the attack-family-diversity bottleneck. Protocol:
+one batched Jev `Choice` per turn ("which tool will the agent call next?"
+over tools seen so far + other), trajectory signal = mean P(actual tool),
+stratified sample of 216 holdout trajectories, ~2,000 calls, ≈$0.15.
+
+| distribution | mean P(actual) | median |
+|---|---:|---:|
+| rogue (n=108) | 0.413 | 0.39 |
+| clean (n=108) | 0.427 | 0.38 |
+
+The distributions overlap almost completely — **the hypothesis is falsified
+on this benchmark**. Best-threshold F1 (0.62) reflects that tool prediction
+is generally hard, not violation signal. Post-hoc reading: well-designed
+attacks use the same tools in plausible sequences; harmfulness lives in the
+arguments and context, which tool-sequence predictability cannot see.
+The `expectation_violation` trigger was therefore **not implemented**.
+Raw data: `results/raw/prediction_error_poc.json`,
+log `results/raw/prediction_error_poc.log`.
+
 ## Fine-tune experiment — strikes 1–2, abandoned
 
 The scorer was fine-tuned (LoRA SFT on Qwen3.5-4B) to lift recall. Per the
