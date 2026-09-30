@@ -6,6 +6,19 @@ All notable changes to Edward are documented here. Format follows
 ## [Unreleased]
 
 ### Added
+- **Prediction-gated deferral — the WAIT action** (policy `deferral_enabled`,
+  opt-in): when a soft trigger fires, one batched scorer call asks whether
+  waiting one horizon converges without harm; if so Edward defers (bounded by
+  `deferral_max_waits`, re-check after `deferral_horizon_seconds`), and every
+  WAIT is audited with its prediction. Failing predictions and exhausted
+  deferral budgets force PAUSE; hard constraints never defer. (JevTree's
+  receding-horizon idea applied to the supervisor.)
+- **Reference scorer server** (`python -m edward.scorer_server`): the missing
+  half of the local-scorer story — expose Edward's `/v1/score` contract over
+  any OpenAI-compatible endpoint (Ollama, vLLM, llama.cpp). Zero dependencies;
+  `edward doctor` points at it when the scorer is unreachable. Reports
+  one-hot probabilities (a plumbing reference, not a calibrated judge —
+  labeled as such).
 - **Verification-gated convergence (`--done-check`)**: declare shell commands
   that verify task completion (policy `done_checks` or repeatable CLI flag).
   A passing check suppresses the convergence-stall PAUSE (recorded as

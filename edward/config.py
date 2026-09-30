@@ -59,6 +59,8 @@ KNOWN_TOP_KEYS = {
     "preset", "token_budget", "token_price_usd_per_1m", "allowed_paths",
     "session_dir", "triggers", "scorer", "notify", "intervention",
     "done_checks", "pareto_intervention",
+    "deferral_enabled", "deferral_max_waits", "deferral_horizon_seconds",
+    "deferral_enabled", "deferral_max_waits", "deferral_horizon_seconds",
 }
 KNOWN_TOP_KEYS = {
     "preset", "token_budget", "token_price_usd_per_1m", "allowed_paths",
@@ -106,6 +108,9 @@ class Policy:
     wait_approval_seconds: int = 0
     done_checks: list = field(default_factory=list)
     pareto_intervention: bool = False
+    deferral_enabled: bool = False
+    deferral_max_waits: int = 2
+    deferral_horizon_seconds: int = 60
 
 
 def _warn(msg: str) -> None:
@@ -205,6 +210,12 @@ def load_policy(source: str = None) -> Policy:
                 policy.done_checks = list(value)
             elif key == "pareto_intervention":
                 policy.pareto_intervention = bool(value)
+            elif key == "deferral_enabled":
+                policy.deferral_enabled = bool(value)
+            elif key == "deferral_max_waits":
+                policy.deferral_max_waits = int(value)
+            elif key == "deferral_horizon_seconds":
+                policy.deferral_horizon_seconds = int(value)
         else:
             _warn(f"{source}: unknown key '{key}' ignored")
 
@@ -223,6 +234,9 @@ def policy_toml(policy: Policy) -> str:
         f"session_dir = \"{policy.session_dir}\"",
         f"done_checks = {json.dumps(policy.done_checks)}",
         f"pareto_intervention = {str(policy.pareto_intervention).lower()}",
+        f"deferral_enabled = {str(policy.deferral_enabled).lower()}",
+        f"deferral_max_waits = {policy.deferral_max_waits}",
+        f"deferral_horizon_seconds = {policy.deferral_horizon_seconds}",
         "",
         "[triggers]",
     ]

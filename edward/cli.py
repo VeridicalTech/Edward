@@ -238,6 +238,10 @@ def _handle_decision(plane: ControlPlane, decision, killer, label: str) -> int:
     cost = plane.state.cost_usd
     if tokens:
         log_line(f"stopped at {tokens} tokens (~${cost:.2f} spent this session)")
+    if decision.action == "WAIT":
+        log_line("deferring: prediction says waiting one horizon converges without harm "
+                 "(re-check scheduled)")
+        return None
     if decision.action == "CONTINUE":
         return None
     killer.abort()
@@ -561,7 +565,9 @@ def cmd_doctor(args) -> int:
     if health and health.get("ready"):
         checks.append(("scorer", f"[{scorer.name}] {health.get('model')} @ {policy.scorer_base_url} ready", True))
     else:
-        checks.append(("scorer", f"[{scorer.name}] unreachable @ {policy.scorer_base_url} (rule-only mode works without it)", False))
+        checks.append(("scorer", f"[{scorer.name}] unreachable @ {policy.scorer_base_url} "
+                         f"(rule-only works without it; reference server: python -m edward.scorer_server "
+                         f"--upstream http://127.0.0.1:11434/v1 --model <model>)", False))
 
     ok = True
     for name, detail, good in checks:

@@ -47,6 +47,8 @@ class ControlPlane:
         self.log = log or (lambda msg: None)
         self.clock = clock or time.time
         self.done_checker = done_checker
+        self._waits = 0
+        self._wait_until = 0.0
         self.state_engine = StateEngine(token_budget=policy.token_budget,
                                         clock=self.clock if clock else None)
         if policy.allowed_paths:
@@ -72,6 +74,8 @@ class ControlPlane:
 
     def check(self) -> Optional[Decision]:
         now = self.clock()
+        if now < self._wait_until:
+            return None  # deferred horizon: watching, not deciding
         if now - self._last_fired < self.policy.cooldown_seconds:
             return None
 
@@ -81,6 +85,7 @@ class ControlPlane:
             self.log(f"trigger evaluation error (ignored): {exc}")
             return None
         if not trigger:
+            self._waits = 0  # state improved since the last fire
             return None
 
         self._last_fired = now
@@ -111,6 +116,36 @@ class ControlPlane:
                 reason=trigger.reason, trigger=trigger,
             )
         else:
+            # Prediction-gated deferral (JevTree's receding-horizon idea):
+            # if waiting one horizon is predicted to converge without harm,
+            # take the WAIT action instead of intervening immediately —
+            # bounded by deferral_max_waits, never on hard constraints.
+            if (self.policy.deferral_enabled and self.scorer is not None
+                    and self._waits < self.policy.deferral_max_waits):
+                try:
+                    future = self.scorer.consult_future(mss, trigger.reason)
+                except Exception as exc:
+                    self.log(f"scorer error (deferral skipped): {exc}")
+                    future = None
+                if future is not None and (future.get("converge_next") or 0) >= 0.6 \
+                        and (future.get("harm_next") or 1.0) <= 0.3:
+                    self._waits += 1
+                    self._wait_until = now + self.policy.deferral_horizon_seconds
+                    wait_decision = Decision(
+                        action="WAIT", source=f"pareto-future (converge {future['converge_next']:.2f}, "
+                                              f"harm {future['harm_next']:.2f}; wait {self._waits}/"
+                                              f"{self.policy.deferral_max_waits})",
+                        authority="soft_decision", decision_type=trigger.decision_type,
+                        reason=trigger.reason, trigger=trigger, jev=future)
+                    if self.audit:
+                        self.audit.intervention(
+                            session=self.session, trigger_reason=trigger.reason,
+                            decision_type=trigger.decision_type, action="WAIT",
+                            source=wait_decision.source, authority="soft_decision",
+                            mss=mss, jev=future, est_avoided_usd=None)
+                    self._notify(wait_decision)
+                    return wait_decision
+
             jev_result = None
             if self.scorer is not None:
                 try:
@@ -148,6 +183,7 @@ class ControlPlane:
                     trigger=trigger, jev=jev_result,
                 )
 
+        self._waits = 0  # a real intervention resets the deferral budget
         self.interventions += 1
         if self.audit:
             est_avoided_usd = None

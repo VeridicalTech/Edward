@@ -216,3 +216,81 @@ class TestPolicyFields(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ScriptedFutureBackend(DisabledBackend):
+    name = "future"
+
+    def __init__(self, converge, harm):
+        super().__init__()
+        self.converge, self.harm = converge, harm
+        self.calls = 0
+
+    def ask_many(self, state, questions):
+        self.calls += 1
+        out = {}
+        for qid in questions:
+            p = self.converge if qid == "converge_next" else self.harm
+            out[qid] = {"choice": "yes", "confidence": p,
+                        "probabilities": {"yes": p, "no": round(1 - p, 4)},
+                        "backend": self.name}
+        return out
+
+
+class TestDeferral(unittest.TestCase):
+    def _feed(self, td, backend, n_reads=40):
+        t = [0.0]
+
+        def clock():
+            t[0] += 100.0
+            return t[0]
+
+        path = os.path.join(td, "a.jsonl")
+        policy = quiet_policy(deferral_enabled=True)
+        plane = ControlPlane(policy, session="s", audit=AuditLog(path),
+                             scorer=Scorer(backend=backend), clock=clock)
+        actions = []
+        for ev in stall_events(n_reads):
+            d = plane.process_event(ev)
+            if d and d.action in ("WAIT", "PAUSE", "CANCEL", "ESCALATE",
+                                  "REQUEST_HUMAN_APPROVAL", "BLOCK"):
+                actions.append(d.action)
+        return actions, path, plane
+
+    def test_wait_then_bounded_then_pause(self):
+        with tempfile.TemporaryDirectory() as td:
+            actions, path, plane = self._feed(td, ScriptedFutureBackend(0.9, 0.1))
+            first_pause = actions.index("PAUSE")
+            self.assertEqual(actions[:first_pause + 1], ["WAIT", "WAIT", "PAUSE"],
+                             "WAIT must repeat up to deferral_max_waits, then force PAUSE")
+            d = summarize(path)
+            self.assertGreaterEqual(d["by_action"].get("WAIT", 0), 2)
+
+    def test_no_scorer_prediction_falls_through_to_pause(self):
+        with tempfile.TemporaryDirectory() as td:
+            actions, _, _ = self._feed(td, DisabledBackend(), n_reads=16)
+            self.assertEqual(actions[0], "PAUSE", "unavailable future must not defer")
+
+    def test_hard_constraint_never_defers(self):
+        with tempfile.TemporaryDirectory() as td:
+            t = [0.0]
+
+            def clock():
+                t[0] += 100.0
+                return t[0]
+
+            backend = ScriptedFutureBackend(0.95, 0.05)
+            plane = ControlPlane(quiet_policy(deferral_enabled=True),
+                                 session="s", scorer=Scorer(backend=backend), clock=clock)
+            danger = [{"type": "agent_start"},
+                      {"type": "tool_execution_start", "toolCallId": "c1",
+                       "toolName": "bash", "args": {"command": "rm -rf /var/lib/data"}},
+                      {"type": "tool_execution_end", "toolCallId": "c1",
+                       "toolName": "bash", "args": {"command": "rm -rf /var/lib/data"},
+                       "isError": False}]
+            d = None
+            for ev in danger:
+                d = plane.process_event(ev)
+            self.assertIsNotNone(d)
+            self.assertEqual(d.action, "REQUEST_HUMAN_APPROVAL")
+            self.assertEqual(backend.calls, 0, "hard constraints must not consult the future")
