@@ -3,7 +3,7 @@
 All notable changes to Edward are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versioning is semver.
 
-## [Unreleased]
+## [0.4.0] - 2026-09-25
 
 ### Added
 - **`edward init`**: three answers (agent / scenario / scorer) -> starter

@@ -31,7 +31,7 @@ inputs:
   edward-version:
     description: 'edward-guard requirement to install'
     required: false
-    default: 'edward-guard>=0.3.0'
+    default: 'edward-guard>=0.4.0'
 
 outputs:
   outcome:
