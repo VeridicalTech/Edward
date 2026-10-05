@@ -1,12 +1,14 @@
 """v0.4 features: done_checks (verification-gated convergence), Pareto
 intervention selection, scorer-coverage audit."""
 
+import io
 import json
 import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from contextlib import redirect_stdout
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -294,3 +296,52 @@ class TestDeferral(unittest.TestCase):
             self.assertIsNotNone(d)
             self.assertEqual(d.action, "REQUEST_HUMAN_APPROVAL")
             self.assertEqual(backend.calls, 0, "hard constraints must not consult the future")
+
+
+class TestFeedback(unittest.TestCase):
+    def test_feedback_written_on_intervention(self):
+        from edward.engine import Decision
+        from edward.cli import _handle_decision
+        with tempfile.TemporaryDirectory() as td:
+            plane = ControlPlane(quiet_policy(), session="s")
+            plane.feedback_path = os.path.join(td, "fb.json")
+
+            class K:
+                def abort(self): pass
+                def terminate(self): pass
+
+            d = Decision(action="PAUSE", source="rule", authority="soft_decision",
+                         decision_type="should_continue", reason="passive stall",
+                         trigger=None)
+            _handle_decision(plane, d, K(), "test")
+            data = json.load(open(plane.feedback_path))
+            fb = data["edward_feedback"]
+            self.assertEqual(fb["action"], "PAUSE")
+            self.assertEqual(fb["reason"], "passive stall")
+            self.assertIn("suggested_next", fb)
+
+
+class TestBenchAndInit(unittest.TestCase):
+    def test_bench_runs(self):
+        from types import SimpleNamespace
+        from edward.cli import cmd_bench
+        args = SimpleNamespace(events=200, policy=None)
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = cmd_bench(args)
+        self.assertEqual(rc, 0)
+        self.assertIn("ingest+decide", buf.getvalue())
+
+    def test_init_writes_policy(self):
+        from types import SimpleNamespace
+        from edward.cli import cmd_init
+        with tempfile.TemporaryDirectory() as td:
+            out = os.path.join(td, "p.toml")
+            args = SimpleNamespace(agent="pi", scenario="ci", scorer="none", out=out)
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                rc = cmd_init(args)
+            self.assertEqual(rc, 0)
+            text = open(out).read()
+            self.assertIn('done_checks = ["pytest -q"]', text)
+            self.assertIn("enabled = false", text)

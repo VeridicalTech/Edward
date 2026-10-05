@@ -6,6 +6,16 @@ All notable changes to Edward are documented here. Format follows
 ## [Unreleased]
 
 ### Added
+- **`edward init`**: three answers (agent / scenario / scorer) -> starter
+  policy file + next commands. CI scenarios get conservative triggers and a
+  `done_checks` starter; kills the policy-authoring cognitive tax.
+- **`edward bench`**: honest self-overhead — ~0.9 µs/event ingest (1.06M
+  events/s), trigger evaluation p95 ~3 µs on the rules-only path. The
+  guardrail that publishes its own overhead.
+- **`--emit-feedback FILE`** (TS-Flow pattern): on intervention, write a
+  structured feedback JSON (action, reason, spend, suggested next) for the
+  agent or harness to read on resume — guardrail verdicts feed the agent
+  instead of a bare exit code.
 - **Prediction-gated deferral — the WAIT action** (policy `deferral_enabled`,
   opt-in): when a soft trigger fires, one batched scorer call asks whether
   waiting one horizon converges without harm; if so Edward defers (bounded by

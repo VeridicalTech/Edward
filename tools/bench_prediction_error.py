@@ -12,7 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from edward.backends import JevBackend
 
-DATA = Path("/tmp/opencode/stepshield/data/test_holdout")
+DATA = Path("/root/Edward-data/stepshield/data/test_holdout")
 trajs = load = None
 from edward.stepshield import load_trajectories
 trajs = load_trajectories(DATA / "raw_trajectories.jsonl", data_dir=DATA)

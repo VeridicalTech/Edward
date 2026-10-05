@@ -7,7 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from edward.stepshield import load_trajectories, evaluate_mode
 
-DATA = Path("/tmp/opencode/stepshield/data/test_holdout")
+DATA = Path("/root/Edward-data/stepshield/data/test_holdout")
 trajs = load_trajectories(DATA / "raw_trajectories.jsonl", data_dir=DATA)
 rogue = sum(1 for t in trajs if t.trajectory_type == "rogue")
 print(f"trajectories: {len(trajs)} (rogue {rogue}, clean {len(trajs)-rogue}) "

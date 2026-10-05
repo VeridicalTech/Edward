@@ -1,0 +1,4 @@
+progress 10/20 pass_rate 50.0% (9s)
+progress 20/20 pass_rate 40.0% (18s)
+RESULT stepgen PoC: 8/20 pass (40.0%) — viability bar 80% → NOT VIABLE (18s)
+by category: {'SEC': [2, 3], 'INV': [0, 1], 'DEC': [2, 8], 'UFO': [3, 3], 'TST': [0, 3], 'RES': [1, 2]}

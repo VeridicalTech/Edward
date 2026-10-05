@@ -10,6 +10,7 @@ Subcommands:
 
 import argparse
 import json
+import pathlib
 import os
 import queue
 import shutil
@@ -166,7 +167,8 @@ def cmd_wrap(args, cmd) -> int:
         outcome = _run_under_control(run_cmd, policy, scorer, audit, session_id,
                                      max_seconds=args.max_seconds,
                                      is_pi=bool(adapter is not None and adapter.matches(run_cmd)),
-                                     done_checker=done_checker)
+                                     done_checker=done_checker,
+                                     feedback_path=getattr(args, "emit_feedback", None))
         if outcome == EXIT_PAUSED and policy.wait_approval_seconds > 0 \
                 and resumes < MAX_RESUMES and _is_pi_rpc(current_cmd):
             decision = _request_approval(policy, session_id)
@@ -213,10 +215,12 @@ def make_done_checker(cmds):
 
 
 def _run_under_control(cmd, policy: Policy, scorer, audit: AuditLog, session: str,
-                       max_seconds=None, is_pi: bool = False, done_checker=None) -> int:
+                       max_seconds=None, is_pi: bool = False, done_checker=None,
+                       feedback_path: str = None) -> int:
     """Run one child process under the control plane; returns the exit code."""
     plane = ControlPlane(policy, session=session, audit=audit,
                          scorer=scorer, log=log_line, done_checker=done_checker)
+    plane.feedback_path = feedback_path
     audit.session_start(session=session, policy_preset=policy.preset, command=cmd)
 
     try:
@@ -231,8 +235,34 @@ def _run_under_control(cmd, policy: Policy, scorer, audit: AuditLog, session: st
                 pass
 
 
+def _write_feedback(plane: ControlPlane, decision) -> None:
+    """TS-Flow-style guardrail feedback: a structured file the agent (or its
+    harness) can read on resume, instead of a bare exit code."""
+    path = getattr(plane, "feedback_path", None)
+    if not path:
+        return
+    try:
+        payload = {"edward_feedback": {
+            "action": decision.action,
+            "reason": decision.reason,
+            "source": decision.source,
+            "tokens_spent": plane.state.token_usage,
+            "cost_usd": round(plane.state.cost_usd, 4),
+            "suggested_next": ("fix the reported condition, then resume with "
+                               "edward wrap --continue"),
+            "receipt_note": "signed trail in ~/.edward/audit.jsonl (edward verify)",
+        }}
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, indent=2)
+        log_line(f"feedback written: {path}")
+    except OSError as exc:
+        log_line(f"feedback write failed (ignored): {exc}")
+
+
 def _handle_decision(plane: ControlPlane, decision, killer, label: str) -> int:
     log_line(f"TRIGGER: {decision.reason}")
+    if decision.action not in ("CONTINUE", "WAIT"):
+        _write_feedback(plane, decision)
     log_line(f"decision: {decision.action} ({decision.source})")
     tokens = plane.state.token_usage
     cost = plane.state.cost_usd
@@ -585,6 +615,80 @@ def cmd_policy_template(args) -> int:
     return EXIT_OK
 
 
+def cmd_bench(args) -> int:
+    """Honest self-overhead numbers: ingest + trigger evaluation, rules-only."""
+    import statistics
+    import time as _time
+    from .triggers import check_triggers
+    policy = load_policy(args.policy)
+    plane = ControlPlane(policy, session="bench")
+    events = []
+    for i in range(args.events):
+        events.append({"type": "turn_start"})
+        events.append({"type": "tool_execution_start", "toolCallId": f"c{i}",
+                       "toolName": "read", "args": {"path": "f.py"}})
+        events.append({"type": "tool_execution_end", "toolCallId": f"c{i}",
+                       "toolName": "read", "args": {"path": "f.py"}, "isError": False})
+    t0 = _time.perf_counter()
+    for e in events:
+        plane.process_event(e)
+    dt = _time.perf_counter() - t0
+    per = dt / len(events) * 1e6
+    print(f"ingest+decide: {len(events)} events  {dt*1000:.1f}ms  "
+          f"avg {per:.1f} µs/event  throughput {len(events)/dt:,.0f}/s")
+    t1 = _time.perf_counter()
+    samples = []
+    for _ in range(2000):
+        t2 = _time.perf_counter()
+        check_triggers(plane.state_engine.state, policy.triggers)
+        samples.append((_time.perf_counter() - t2) * 1e6)
+    print(f"trigger eval:   avg {statistics.mean(samples):.1f} µs  "
+          f"p50 {statistics.median(samples):.1f} µs  "
+          f"p95 {sorted(samples)[int(0.95*len(samples))]:.1f} µs (n=2000)")
+    print(f"interventions during bench: {plane.interventions}  "
+          f"(scorer: {'on' if plane.scorer else 'off — rules-only path'})")
+    return EXIT_OK
+
+
+def cmd_init(args) -> int:
+    """Progressive onboarding: three answers -> starter policy + next commands."""
+    interactive = sys.stdin.isatty()
+    agent = args.agent or "pi"
+    if not agent and interactive:
+        agent = input("Agent to supervise [pi/codex/other] (pi): ").strip() or "pi"
+    scenario = args.scenario or "ci"
+    if not args.scenario and interactive:
+        scenario = input("Scenario [ci/interactive/both] (ci): ").strip() or "ci"
+    scorer = args.scorer
+    if scorer is None and interactive:
+        scorer = input("Scorer URL (empty = rule-only): ").strip() or "none"
+    scorer = scorer or "none"
+
+    policy = load_policy("conservative" if scenario == "ci" else "balanced")
+    if scorer != "none":
+        policy.scorer_base_url = scorer
+    else:
+        policy.scorer_enabled = False
+    if scenario in ("ci", "both"):
+        policy.done_checks = ["pytest -q"]  # starter; edit to your definition of done
+    out = pathlib.Path(args.out)
+    if out.exists():
+        print(f"warning: {out} exists — overwriting")
+    out.write_text(policy_toml(policy), encoding="utf-8")
+
+    print(f"\nwrote {out}\n")
+    print("next steps:")
+    print("  1. smoke:  edward demo --live-scorer --offline")
+    print(f"  2. real:   edward wrap --policy {out} -- <your agent command>")
+    if scenario in ("ci", "both"):
+        print("  3. CI:     use VeridicalTech/Edward action (see README 'Unattended runs & CI')")
+        print("             add --emit-feedback .edward-feedback.json for structured agent feedback")
+    if scorer == "none":
+        print("  note:      rule-only mode is protective; for semantic judgment see")
+        print("             python -m edward.scorer_server --help (works with Ollama/vLLM/llama.cpp)")
+    return EXIT_OK
+
+
 def cmd_keygen(args) -> int:
     try:
         seed, pub = ensure_key(args.key)
@@ -635,6 +739,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_wrap.add_argument("--no-receipts", action="store_true", help="disable signed receipts")
     p_wrap.add_argument("--continue", dest="continue_session", action="store_true", help="resume the most recently paused session (session id recovered from audit)")
     p_wrap.add_argument("--agent", default="auto", help="agent adapter: auto (default), generic, pi, or a plugin name (entry-point group edward.adapters)")
+    p_wrap.add_argument("--emit-feedback", metavar="FILE",
+                        help="on intervention: write a structured feedback JSON (action, reason, spend, suggested next) for the agent/harness to read on resume")
     p_wrap.add_argument("--done-check", action="append", metavar="CMD",
                         help="shell command that verifies task completion; a passing check suppresses the convergence-stall PAUSE, a failing one becomes evidence (repeatable)")
     p_wrap.add_argument("--session", metavar="ID", help="explicit edward session id to resume (with --continue)")
@@ -647,6 +753,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_demo.add_argument("--live-scorer", action="store_true", help="include live scorer calls")
     p_demo.add_argument("--offline", action="store_true",
                         help="with --live-scorer: use the deterministic heuristic stub (no GPU, no API key)")
+
+    p_bench = sub.add_parser("bench", help="measure Edward's own overhead (ingest, triggers)")
+    add_common(p_bench)
+    p_bench.add_argument("--events", type=int, default=20000)
+
+    p_init = sub.add_parser("init", help="onboarding: write a starter policy + next commands")
+    p_init.add_argument("--agent", choices=["pi", "codex", "other"], default=None)
+    p_init.add_argument("--scenario", choices=["ci", "interactive", "both"], default=None)
+    p_init.add_argument("--scorer", default=None, help="scorer URL, or 'none' for rule-only")
+    p_init.add_argument("--out", default="edward.policy.toml")
 
     p_eval = sub.add_parser("eval", help="evaluate a policy against the scenario suite")
     add_common(p_eval)
@@ -711,6 +827,10 @@ def main(argv=None) -> int:
         return cmd_doctor(args)
     if args.command == "policy-template":
         return cmd_policy_template(args)
+    if args.command == "bench":
+        return cmd_bench(args)
+    if args.command == "init":
+        return cmd_init(args)
     if args.command == "keygen":
         return cmd_keygen(args)
     if args.command == "verify":
