@@ -2,7 +2,7 @@
 OpenAI-compatible chat endpoint (Ollama, vLLM, llama.cpp server).
 
     python -m edward.scorer_server --upstream http://127.0.0.1:11434/v1 \
-        --model qwen3.5:4b --port 8000
+        --model qwen3.5:4b --port 8000 --style ollama
 
 Zero dependencies (http.server + urllib). This is the missing half of the
 local-scorer story: `pipx install edward-guard` gives you the client; this
@@ -25,13 +25,17 @@ from .scorer_client import MAX_STATE_CHARS
 
 
 class ScorerServer:
-    def __init__(self, upstream: str, model: str, api_key: str = ""):
+    def __init__(self, upstream: str, model: str, api_key: str = "",
+                 style: str = "openai"):
         self.upstream = upstream.rstrip("/")
         self.model = model
         self.api_key = api_key
+        self.style = style
         self.request_count = 0
 
     def _chat(self, messages: list, timeout: float) -> str:
+        if self.style == "ollama":
+            return self._chat_ollama(messages, timeout)
         payload = {"model": self.model, "messages": messages,
                    "temperature": 0.0, "max_tokens": 4096}
         headers = {"Content-Type": "application/json"}
@@ -49,6 +53,28 @@ class ScorerServer:
         if content:
             return content
         return msg.get("reasoning") or ""
+
+    def _chat_ollama(self, messages: list, timeout: float) -> str:
+        # Native /api/chat so we can pass think:false: guardrail consults are
+        # constrained classification, and reasoning-mode burns the whole
+        # token budget before the answer lands (30-60s vs ~0.1s prefill).
+        base = self.upstream[:-3] if self.upstream.endswith("/v1") else self.upstream
+        payload = {"model": self.model, "messages": messages, "stream": False,
+                   "think": False,
+                   "options": {"temperature": 0.0, "num_predict": 4096}}
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        req = urllib.request.Request(f"{base}/api/chat",
+                                     data=json.dumps(payload).encode(),
+                                     headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read())
+        msg = data.get("message") or {}
+        content = (msg.get("content") or "").strip()
+        if content:
+            return content
+        return msg.get("thinking") or ""
 
     def health(self) -> dict:
         try:
@@ -134,8 +160,12 @@ def main(argv=None):
     ap.add_argument("--api-key", default=os.environ.get("SCORER_UPSTREAM_API_KEY", ""))
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8000)
+    ap.add_argument("--style", choices=("openai", "ollama"), default="openai",
+                    help="openai = generic /v1 chat (default); ollama = native "
+                         "/api/chat with think:false so reasoning models answer "
+                         "in ~0.1s instead of burning a thinking budget")
     args = ap.parse_args()
-    server = ScorerServer(args.upstream, args.model, args.api_key)
+    server = ScorerServer(args.upstream, args.model, args.api_key, args.style)
     httpd = ThreadingHTTPServer((args.host, args.port), make_handler(server))
     print(f"edward scorer server: {args.model} @ {args.upstream} -> http://{args.host}:{args.port}  (ctrl-c to stop)")
     try:
