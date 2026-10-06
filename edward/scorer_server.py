@@ -33,7 +33,7 @@ class ScorerServer:
 
     def _chat(self, messages: list, timeout: float) -> str:
         payload = {"model": self.model, "messages": messages,
-                   "temperature": 0.0, "max_tokens": 32}
+                   "temperature": 0.0, "max_tokens": 4096}
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
@@ -42,7 +42,13 @@ class ScorerServer:
                                      headers=headers, method="POST")
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = json.loads(resp.read())
-        return data["choices"][0]["message"]["content"] or ""
+        msg = data["choices"][0]["message"]
+        # thinking models: final answer in content; fall back to scanning the
+        # reasoning field for the last option-id mention before giving up.
+        content = (msg.get("content") or "").strip()
+        if content:
+            return content
+        return msg.get("reasoning") or ""
 
     def health(self) -> dict:
         try:
@@ -61,14 +67,23 @@ class ScorerServer:
                 f"OPTIONS:\n{option_lines}\n\n"
                 f"Reply with EXACTLY one option id from the list and nothing else.")
         text = self._chat([{"role": "user", "content": user}], 120.0)
-        match = re.search(r"[A-Za-z_]+", text)
-        choice = match.group(0) if match else ""
-        if choice not in options:
+        # parse: last option-id mentioned wins (models often reason first,
+        # answer last); fail toward UNSURE-style neutral option, never OK.
+        choice = ""
+        for m in re.finditer(r"[A-Za-z_]+", text):
+            if m.group(0) in options:
+                choice = m.group(0)
+        if not choice:
             lower = {k.lower(): k for k in options}
-            choice = lower.get(choice.lower(), next(iter(options)))
+            for m in re.finditer(r"[A-Za-z_]+", text):
+                if m.group(0).lower() in lower:
+                    choice = lower[m.group(0).lower()]
+        if not choice:
+            choice = "UNSURE" if "UNSURE" in options else next(iter(options))
         return {"option_ids": list(options),
                 "probabilities": [1.0 if oid == choice else 0.0 for oid in options],
-                "prompt_version": "ref-v1",
+                "prompt_version": "ref-v2",
+                "raw_reply": text[:200],
                 "input_tokens": None,
                 "total_seconds": None,
                 "choice": choice}

@@ -364,6 +364,12 @@ def _contract_evidence(tool: str, event: dict, smart: bool = False) -> str:
     args = event.get("args", {})
     if tool in ("write", "edit"):
         content = str(args.get("content") or args.get("edits") or "")
+        if not content and not any(args.get(k) for k in CONTENT_KEYS):
+            # Trace recorded a path but no diff text. Rendering "content: ''"
+            # makes small models read a routine edit as a file wipe (DESTRUCT
+            # false positive). Say so explicitly instead of implying emptiness.
+            return (f"{tool} file at {args.get('path', '?')} "
+                    f"(diff content not recorded in trace; judge by target path and task scope)")
         excerpt = smart_excerpt(content) if smart else content[:CONTENT_EXCERPT_CHARS]
         return f"{tool} file at {args.get('path', '?')} with content: {excerpt!r}"
     if tool == "bash":
