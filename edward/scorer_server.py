@@ -8,20 +8,36 @@ Zero dependencies (http.server + urllib). This is the missing half of the
 local-scorer story: `pipx install edward-guard` gives you the client; this
 gives you a runnable server so `edward wrap` works out of the box.
 
-Honesty: the reference server asks the model to reply with exactly one
-option id and reports one-hot probabilities (confidence 0.99). It is a
-plumbing reference, not a calibrated judge — for calibrated probabilities
-use the Jev backend or a LAN server with real logprob support.
+Honesty: with --style openai the reference server asks the model to reply with
+one option id and reports one-hot probabilities. With --style ollama it runs a
+SemIf-style direct readout instead (TheoLeeCJ/SemIf, direct-options): raw Qwen
+ChatML with an empty think block, one forward pass, num_predict=1, and the
+answer distribution taken from the top-20 next-token logprobs over the option
+letters A.. — softmaxed in float64. Probabilities are then real (conditional on
+the supplied options), so downstream confidence gates see calibrated-ish
+values, not a fake 1.0. It is still a plumbing reference, not a trained
+decision model (see jaredpalmer/kev for that).
 """
 
 import argparse
 import json
+import math
 import os
 import re
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from .scorer_client import MAX_STATE_CHARS
+
+# SemIf direct system prompt (byte-faithful to SemIf core.py DIRECT_SYSTEM).
+SEMIF_SYSTEM = ("Apply the supplied criterion to the supplied evidence. "
+                "Choose exactly one listed option. Respond with only its "
+                "uppercase letter, with no explanation or reasoning.")
+# Raw Qwen ChatML with an empty think block: the prompt ends exactly at the
+# first answer-token position, so one forward pass reads the decision.
+SEMIF_TEMPLATE = ("<|im_start|>system\n{system}<|im_end|>\n"
+                  "<|im_start|>user\n{user}<|im_end|>\n"
+                  "<|im_start|>assistant\n<think>\n\n</think>\n\n")
 
 
 class ScorerServer:
@@ -32,6 +48,8 @@ class ScorerServer:
         self.api_key = api_key
         self.style = style
         self.request_count = 0
+        base = self.upstream[:-3] if self.upstream.endswith("/v1") else self.upstream
+        self.ollama_base = base
 
     def _chat(self, messages: list, timeout: float) -> str:
         if self.style == "ollama":
@@ -54,37 +72,21 @@ class ScorerServer:
             return content
         return msg.get("reasoning") or ""
 
-    def _chat_ollama(self, messages: list, timeout: float) -> str:
-        # Native /api/chat so we can pass think:false: guardrail consults are
-        # constrained classification, and reasoning-mode burns the whole
-        # token budget before the answer lands (30-60s vs ~0.1s prefill).
-        base = self.upstream[:-3] if self.upstream.endswith("/v1") else self.upstream
-        payload = {"model": self.model, "messages": messages, "stream": False,
-                   "think": False,
-                   "options": {"temperature": 0.0, "num_predict": 4096}}
-        headers = {"Content-Type": "application/json"}
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
-        req = urllib.request.Request(f"{base}/api/chat",
-                                     data=json.dumps(payload).encode(),
-                                     headers=headers, method="POST")
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            data = json.loads(resp.read())
-        msg = data.get("message") or {}
-        content = (msg.get("content") or "").strip()
-        if content:
-            return content
-        return msg.get("thinking") or ""
 
     def health(self) -> dict:
         try:
-            self._chat([{"role": "user", "content": "Reply with the single word: ready"}], 30.0)
+            if self.style == "ollama":
+                self._score_ollama_direct({}, "Reply ready.", {"OK": "ready"})
+            else:
+                self._chat([{"role": "user", "content": "Reply with the single word: ready"}], 30.0)
             return {"ready": True, "model": self.model, "kind": "reference"}
         except Exception as exc:
             return {"ready": False, "error": str(exc)[:200]}
 
     def score(self, state, question: str, options: dict) -> dict:
         self.request_count += 1
+        if self.style == "ollama":
+            return self._score_ollama_direct(state, question, options)
         encoded = json.dumps(state, separators=(",", ":"), default=str)
         if len(encoded) > MAX_STATE_CHARS:
             state = encoded[:MAX_STATE_CHARS]
@@ -113,6 +115,65 @@ class ScorerServer:
                 "input_tokens": None,
                 "total_seconds": None,
                 "choice": choice}
+
+    def _score_ollama_direct(self, state, question: str, options: dict) -> dict:
+        """SemIf-style direct readout over Ollama /api/generate.
+
+        One forward pass, no generation: the prompt is raw Qwen ChatML with an
+        empty think block, ending exactly at the answer position; the decision
+        distribution comes from the top-20 next-token logprobs over the option
+        letters, softmaxed in float64. Letters missing from the top-20 are
+        floored just under the weakest observed candidate (documented
+        deviation: SemIf/semantic-if reject such rows; a reference server
+        should stay total and note the substitution)."""
+        evidence = json.dumps(state, ensure_ascii=False, separators=(", ", ": "),
+                              default=str)[:MAX_STATE_CHARS] if state else "(none)"
+        payload = {"evidence": evidence, "criterion": question,
+                   "options": [{"letter": chr(65 + i), "description": desc}
+                               for i, (oid, desc) in enumerate(options.items())
+                               if i < 16]}
+        user = json.dumps(payload, ensure_ascii=False)
+        prompt = SEMIF_TEMPLATE.format(system=SEMIF_SYSTEM, user=user)
+        body = {"model": self.model, "prompt": prompt, "raw": True, "stream": False,
+                "logprobs": True, "top_logprobs": 20,
+                "options": {"temperature": 0.0, "num_predict": 1}}
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        req = urllib.request.Request(f"{self.ollama_base}/api/generate",
+                                     data=json.dumps(body).encode(),
+                                     headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=120.0) as resp:
+            data = json.loads(resp.read())
+        pos = (data.get("logprobs") or [{}])[0]
+        argmax_token = pos.get("token") or ""
+        letters = {chr(65 + i): oid for i, oid in enumerate(options) if i < 16}
+        found = {}
+        for t in pos.get("top_logprobs") or []:
+            tok = (t.get("token") or "").strip()
+            if tok in letters and tok not in found:
+                found[tok] = float(t.get("logprob") or 0.0)
+        if not found:
+            neutral = "UNSURE" if "UNSURE" in options else next(iter(options))
+            probs = {oid: (1.0 if oid == neutral else 0.0) for oid in options}
+            note = "direct: no option letter in top-20, neutral fallback"
+        else:
+            floor = min(found.values()) - 4.6
+            values = {L: found.get(L, floor) for L in letters}
+            mx = max(values.values())
+            exps = {L: math.exp(v - mx) for L, v in values.items()}
+            total = math.fsum(exps.values())
+            probs = {letters[L]: exps[L] / total for L in letters}
+            note = (f"direct argmax={argmax_token!r} "
+                    + " ".join(f"{letters[L]}={values[L]:.3f}" for L in letters))
+        return {"option_ids": list(options),
+                "probabilities": [probs.get(oid, 0.0) for oid in options],
+                "prompt_version": "semif-direct-v1",
+                "raw_reply": note[:200],
+                "input_tokens": data.get("prompt_eval_count"),
+                "total_seconds": None,
+                "choice": max(probs, key=probs.get) if probs else
+                          ("UNSURE" if "UNSURE" in options else next(iter(options)))}
 
 
 def make_handler(server: ScorerServer):
