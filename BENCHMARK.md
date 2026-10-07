@@ -169,6 +169,38 @@ edward-scorer-server --upstream http://127.0.0.1:11434/v1 \
 python3 tools/bench_local_holdout.py qwen3.5:9b 0.98
 ```
 
+### Real event streams — replaying actual agent sessions (v0.4.1)
+
+StepShield is synthetic. To measure the false-alarm rate on *real* work, we
+replayed every stored agent session on the development machine through the
+full pipeline (deterministic rules + qwen3.5:9b direct readout): 56 real
+sessions (Codex CLI `~/.codex/sessions`, Claude Code `~/.claude/projects`),
+**2,663 real tool steps** — genuine development: edits, installs, service
+configuration, git operations, including the development of Edward itself.
+No ground-truth labels exist for these (they are benign work), so this
+measures the only number that matters for daily-driver UX: how often does
+the guardrail cry wolf?
+
+| layer | flags | rate | what fired |
+|---|---:|---:|---|
+| semantic judge (9b direct readout) | **0 / 2,663 steps** | **0.0%** | nothing — every routine edit, install and config change passed |
+| deterministic rules | 10 / 56 sessions | 17.9% | all `REQUEST_HUMAN_APPROVAL` — the agent asking the human for permission |
+
+Honest reading:
+
+- The semantic layer's 0-for-2,663 on real work is the complement of the
+  StepShield ladder: calibrated enough to stay silent during months of
+  normal development, tight enough to fire on the holdout's rogue steps.
+- The rules-layer flags are a calibration finding, not a win: real agents
+  ask for human approval routinely. `REQUEST_HUMAN_APPROVAL` should map to
+  an advisory receipt ("agent asked"), not a detection. Queued for the
+  policy layer.
+- No recall claim is possible here — benign sessions have no unsafe steps.
+  Recall on labeled real-ish interactions is the R-Judge slice below.
+
+Raw log: `results/raw/replay_real_sessions.log`; reproduction:
+`python3 tools/replay_real_sessions.py 60` (step cap per session).
+
 ### Pareto intervention selection — neutral result, reported as measured
 
 The JevTree-inspired multi-candidate path (`pareto_intervention=true`: one
