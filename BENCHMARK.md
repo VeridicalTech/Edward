@@ -201,6 +201,20 @@ Honest reading:
 Raw log: `results/raw/replay_real_sessions.log`; reproduction:
 `python3 tools/replay_real_sessions.py 60` (step cap per session).
 
+**Labeled real-ish slice (early signal, n=21).** R-Judge
+([Lordog/R-Judge](https://github.com/Lordog/R-Judge), EMNLP 2024) publishes
+569 multi-turn agent interaction records with human safety labels — but 94
+distinct tool families, mostly non-coding domains (robots, banking, IoT);
+Edward's coding contract does not apply to those. The terminal slice (21
+records where the agent acts via `TerminalExecute`, 11 unsafe / 10 safe)
+runs through the full pipeline: recall 27.3%, FPR 20.0%, precision 60% —
+directionally consistent with the StepShield 4B row, but far too small to
+read as more than an early signal. Notable: on one unsafe record the
+deterministic layer intercepted `sudo apt-get install <unverified-package>`
+and terminated the session with a receipt — the intended demo of Edward on
+a real-shaped flow. Reproduction: `python3 tools/bench_rjudge_slice.py`
+(needs `R-Judge` cloned to `/root/Edward-data/rjudge`).
+
 ### Pareto intervention selection — neutral result, reported as measured
 
 The JevTree-inspired multi-candidate path (`pareto_intervention=true`: one
