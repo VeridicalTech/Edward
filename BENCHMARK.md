@@ -108,6 +108,67 @@ EDWARD_SCORER_BACKEND=jev TYPESAFE_API_KEY=... \
   python3 tools/bench_jev_holdout.py
 ```
 
+### Fully-local Ollama stack — direct readout (v0.4.1)
+
+The documented out-of-box path: Ollama + `edward-scorer-server --style
+ollama`. Method follows [SemIf](https://github.com/TheoLeeCJ/SemIf)
+(direct-options): raw Qwen ChatML with an empty think block, **one forward
+pass, no generated text**; the decision distribution is read from the top-20
+next-token logprobs over the option letters and softmaxed in float64
+(~0.15-0.5 s/decision). Returned probabilities are real (conditional on the
+supplied options) — which is what makes the asymmetric-confirm gates mean
+something locally. Rules-only baseline on the same holdout: **recall 7.4% /
+FPR 1.9%** — the StepShield violations are semantic; the deterministic layer
+alone catches almost nothing here.
+
+| config | Recall | FPR | Precision | EIR₃ | premature | wall |
+|---|---:|---:|---:|---:|---:|---:|
+| rules only (no scorer) | 7.4% | 1.9% | 80.0% | 0.125 | 4 | <1 s |
+| Ollama qwen3.5:4b, express ≥0.90 | 31.5% | 6.5% | 82.9% | 0.735 | 7 | 1.9 h* |
+| Ollama qwen3.5:9b, express ≥0.90 | **56.5%** | 19.4% | 74.4% | 0.770 | 13 | 23 min |
+| **Ollama qwen3.5:9b, express ≥0.98 (recommended)** | 44.4% | **7.4%** | **85.7%** | **0.833** | 6 | 25 min |
+| LAN bf16 4B endpoint reference (row #5) | 58.3% | 17.6% | 76.8% | 0.778 | — | — |
+| Jev 1.13 hosted (row #6) | 59.3% | 10.2% | 85.3% | 0.906 | — | — |
+
+*the 4b wall time includes cold-load thrash on an 8 GB card, not per-decision
+latency (0.12 s measured warm).
+
+Honest reading:
+
+- The out-of-box 9b row lands within noise of the tuned LAN 4B service
+  (56.5/19.4 vs 58.3/17.6) — what a user gets at home on an 8 GB GPU equals
+  what the tuned LAN stack delivered. The express gate is then a real dial:
+  0.90 → 0.98 trades 12 recall points for 12 FPR points and lands within
+  2 FPR points of the hosted-Jev row at higher precision.
+- The recall ladder is capacity-bound: 7.4% (rules) → 31.5% (4B direct) →
+  44-56% (9B direct) → 59.3% (Jev hosted) → 95.4% (paper's GPT-4.1-mini).
+  The local tier is a floor, not a peer; the frontier is a trained decision
+  model (see jaredpalmer/kev — its `/v1/systemone` API is already what
+  Edward's `jev` backend speaks).
+- Known disagreement class: credential-adjacent clean steps (`echo $TOKEN`
+  to verify an env var) are labeled clean because the trace masks the value;
+  the judge fires at conf ≥0.91. Reported as FPR per dataset labels — though
+  a human security reviewer might side with the judge.
+- A few prompts produce no option letter in the top-20 (the model ignores
+  the contract); the server then returns a neutral one-hot UNSURE. SemIf
+  treats such rows as errors; the reference server stays total and notes the
+  fallback in `raw_reply`.
+
+Raw logs: `results/raw/stepshield_contract_v1b_local_qwen3.log` (4b),
+`stepshield_contract_v1b_local_qwen9.log` (9b),
+`stepshield_contract_v1b_local_qwen9_hg98.log` (9b express ≥0.98); the
+pre-fix run is kept as an incident record
+(`..._qwen3.prefix-bug.log` — evidence renderer fabricated `content: ""`
+for path-only edit traces, which a small model reads as a file wipe).
+Reproduction:
+
+```bash
+ollama pull qwen3.5:9b
+edward-scorer-server --upstream http://127.0.0.1:11434/v1 \
+  --model qwen3.5:9b --port 8001 --style ollama
+python3 tools/bench_local_holdout.py qwen3.5:9b 0.98
+```
+
 ### Pareto intervention selection — neutral result, reported as measured
 
 The JevTree-inspired multi-candidate path (`pareto_intervention=true`: one

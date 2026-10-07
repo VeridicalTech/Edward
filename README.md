@@ -130,9 +130,17 @@ from the audit log. CANCEL / BLOCK exit 76. Audit lands in
 `~/.edward/audit.jsonl` — including an estimated avoided-spend per intervention.
 
 **The scorer is optional and always advisory.** Point `EDWARD_SCORER_URL` at
-any local OpenAI-compatible scoring endpoint (a 4B model on your GPU box is
-plenty — see [deploy/](deploy/) for the team-LAN topology). Scorer down?
-Edward logs a warning and runs rule-only. It stays protective.
+any local OpenAI-compatible scoring endpoint. The reference server ships two
+styles: `--style openai` (generic chat completion, one-hot reference verdicts)
+and `--style ollama` — a [SemIf](https://github.com/TheoLeeCJ/SemIf)-style
+direct readout over Ollama: one forward pass, no generated text, real
+softmaxed probabilities over the option letters in ~0.2 s. On an 8 GB GPU,
+`qwen3.5:9b` + `--style ollama` lands within noise of the tuned LAN service
+(56.5%/19.4% vs 58.3%/17.6% recall/FPR on the 216-trajectory holdout — see
+[BENCHMARK.md](BENCHMARK.md)); the express gate (≥0.98) is the recommended
+operating point (85.7% precision at 7.4% FPR). See [deploy/](deploy/) for the
+team-LAN topology. Scorer down? Edward logs a warning and runs rule-only.
+It stays protective.
 
 **Pluggable scorer backends.** `EDWARD_SCORER_BACKEND` selects where judgments
 come from: `endpoint` (default — the LAN scorer server above), `jev` (TypeSafe
