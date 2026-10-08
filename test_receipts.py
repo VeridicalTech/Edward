@@ -110,8 +110,9 @@ class TestReceiptChain(unittest.TestCase):
             self.assertEqual(seed1, seed2)
             self.assertEqual(pub1, pub2)
             self.assertEqual(len(pub1), 44)  # base64 of 32 bytes
-            mode = os.stat(kp).st_mode & 0o777
-            self.assertEqual(mode, 0o600)
+            if os.name != "nt":  # Windows has no POSIX permission bits
+                mode = os.stat(kp).st_mode & 0o777
+                self.assertEqual(mode, 0o600)
 
 
 if __name__ == "__main__":
