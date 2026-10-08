@@ -1,0 +1,7 @@
+FROM python:3.12-slim
+
+RUN pip install --no-cache-dir edward-guard
+
+# Reference scorer server (zero dependencies). Pair with an Ollama service:
+#   docker compose --profile gpu up -d ollama scorer
+ENTRYPOINT ["edward-scorer-server"]

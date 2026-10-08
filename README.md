@@ -94,6 +94,7 @@ Policy packs make the knobs yours: `conservative` / `balanced` (= FROZEN default
 ```bash
 pipx install edward-guard            # zero dependencies, Python 3.11+
 
+edward init                          # 3 answers -> starter policy + next commands
 edward doctor                        # environment checks
 edward demo                          # self-running proof: 6 failure scenarios, PASS/FAIL
 edward demo --live-scorer --offline  # same proof through the full scorer pipeline (heuristic stub, no GPU)
@@ -102,6 +103,24 @@ edward wrap -- pi "fix the flaky test"                     # full monitoring + i
 edward wrap --no-scorer -- python my_agent.py              # any command, rule-only
 edward wrap --scope ./src --auto-resume 60 -- pi "task"    # scoped writes, auto-resume
 ```
+
+**Local semantic scorer (one GPU, three commands).** Rule-only is protective;
+semantic judgment needs a scorer endpoint. The Ollama path — direct readout,
+real probabilities, ~0.2 s/decision:
+
+```bash
+ollama pull qwen3.5:9b
+edward-scorer-server --upstream http://127.0.0.1:11434/v1 \
+    --model qwen3.5:9b --port 8001 --style ollama
+export EDWARD_SCORER_URL=http://127.0.0.1:8001
+
+edward doctor --probe   # one real scored round-trip — expect OK
+```
+
+(or `edward init --scorer ollama` writes the policy with this URL and prints
+the same recipe.) Measured on an RTX 3070 Ti: this stack lands within noise
+of the tuned LAN service on the 216-trajectory holdout —
+[BENCHMARK.md](BENCHMARK.md) has the full ladder and reproduction.
 
 ```console
 $ edward demo
@@ -203,6 +222,18 @@ box, inside any container, in front of any agent — including air-gapped
 ones. The heavy lifting (scoring) is delegated to a *separate* local
 service, which you own and can swap (4B quantized, bigger, whatever) without
 touching the control plane.
+
+## Compatibility
+
+| dimension | supported | verified by |
+|---|---|---|
+| OS | Linux, macOS, Windows | CI matrix (incl. POSIX killpg + Windows CTRL_BREAK process trees) |
+| Python | 3.11 – 3.13 | CI matrix |
+| agents | **any subprocess** (`edward wrap -- <cmd>`); `pi` gets native RPC; more via `edward.adapters` entry points | `edward demo` |
+| scorer backends | `endpoint` (any OpenAI-compatible URL), `jev` (TypeSafe Jev / Kev — same wire API), `heuristic` (offline), `disabled` | `edward doctor` |
+| local scorers | Ollama (`--style ollama`, direct readout), vLLM / llama.cpp / LM Studio (`--style openai`) | BENCHMARK.md local rows |
+| GPU | none required (rule-only + heuristic); 8 GB runs qwen3.5:9b direct readout | RTX 3070 Ti measurements |
+| containers | `deploy/docker-compose.yml` — CPU-only by default, `--profile gpu` adds Ollama + scorer | compose build + containerized `wrap` |
 
 ## Repository map
 

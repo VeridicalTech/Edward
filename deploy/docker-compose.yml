@@ -1,41 +1,67 @@
 # Edward deployment — team-LAN topology (deployment tier B).
 #
-#   scorer  : Qwen/Qwen3.5-4B scoring endpoint (GET /health, POST /v1/score)
-#             LAN only, no auth — never expose beyond the trusted network.
-#   edward  : control plane wrapping agent commands in the shared workspace.
+# Plain (CPU, no GPU needed):
+#   docker compose build edward
+#   docker compose run --rm edward wrap --no-scorer -- pi "fix the flaky test"
 #
-# Usage:
-#   docker compose run --rm edward wrap -- pi "fix the flaky test"
+# With a local semantic scorer (GPU host, direct-readout over Ollama):
+#   docker compose --profile gpu up -d ollama
+#   docker compose --profile gpu exec ollama ollama pull qwen3.5:9b
+#   docker compose --profile gpu up -d scorer
+#   docker compose --profile gpu run --rm edward wrap -- pi "task"
 #
-# Point EDWARD_SCORER_URL at an existing scorer instead of starting one:
-#   docker compose run --rm -e EDWARD_SCORER_URL=http://<gpu-box>:8000 \
-#       edward wrap --no-scorer -- python my_agent.py
+# Point EDWARD_SCORER_URL at an existing scorer instead:
+#   docker compose run --rm -e EDWARD_SCORER_URL=http://<gpu-box>:8001 \
+#       edward wrap -- python my_agent.py
+#
+# Scorer down / unreachable -> Edward logs a warning and runs rule-only.
+# It stays protective. LAN only, no auth — never expose beyond the
+# trusted network.
 
 services:
-  scorer:
-    image: ghcr.io/OWNER/edward-scorer:latest   # your scoring-server image
-    build: ./scorer                             # or a build context with server.py
-    restart: on-failure
+  edward:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
     environment:
-      MODEL: Qwen/Qwen3.5-4B
+      EDWARD_SCORER_URL: http://scorer:8001
+    working_dir: /workspace
     volumes:
-      - ./models:/models:ro                     # local weights or HF cache
-    # GPU host only:
+      - ./workspace:/workspace
+    command: ["wrap", "--no-scorer", "--", "python", "-c", "print('hello from edward')"]
+
+  scorer:
+    image: edward-scorer:local
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.scorer
+    profiles: ["gpu"]
+    depends_on:
+      - ollama
+    restart: on-failure
+    ports:
+      - "8001:8001"
+    command:
+      - --upstream
+      - http://ollama:11434/v1
+      - --model
+      - qwen3.5:9b
+      - --port
+      - "8001"
+      - --style
+      - ollama
+
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["gpu"]
+    restart: on-failure
+    volumes:
+      - ollama-models:/root/.ollama
+    # GPU host only — uncomment to score on the device instead of CPU:
     # deploy:
     #   resources:
     #     reservations:
     #       devices: [{ driver: nvidia, count: 1, capabilities: [gpu] }]
 
-  edward:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile
-    depends_on:
-      - scorer
-    environment:
-      EDWARD_SCORER_URL: http://scorer:8000
-    working_dir: /workspace
-    volumes:
-      - ./workspace:/workspace
-    # override the command with your guarded task:
-    command: ["wrap", "--no-scorer", "--", "python", "-c", "print('hello from edward')"]
+volumes:
+  ollama-models:

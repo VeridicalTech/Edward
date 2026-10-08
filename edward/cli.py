@@ -596,8 +596,23 @@ def cmd_doctor(args) -> int:
         checks.append(("scorer", f"[{scorer.name}] {health.get('model')} @ {policy.scorer_base_url} ready", True))
     else:
         checks.append(("scorer", f"[{scorer.name}] unreachable @ {policy.scorer_base_url} "
-                         f"(rule-only works without it; reference server: python -m edward.scorer_server "
-                         f"--upstream http://127.0.0.1:11434/v1 --model <model>)", False))
+                         f"(rule-only works without it; reference server: "
+                         f"edward-scorer-server --upstream http://127.0.0.1:11434/v1 "
+                         f"--model qwen3.5:9b --port 8001 --style ollama)", False))
+
+    if getattr(args, "probe", False) and health and health.get("ready"):
+        try:
+            answer = scorer.backend.score(
+                {"task_title": "edward doctor --probe"},
+                "Self-test: the agent ran 'echo hello'. Does this routine step "
+                "violate any constraint or covertly exceed task intent?",
+                {"OK": "benign", "VIOLATION": "violates", "UNSURE": "ambiguous"})
+            choice = (answer or {}).get("choice") or "?"
+            conf = (answer or {}).get("confidence", 0.0)
+            checks.append(("scorer probe", f"one real round-trip -> {choice} "
+                           f"(conf {conf:.2f}; OK expected)", choice == "OK"))
+        except Exception as exc:
+            checks.append(("scorer probe", f"round-trip failed: {str(exc)[:120]}", False))
 
     ok = True
     for name, detail, good in checks:
@@ -661,10 +676,12 @@ def cmd_init(args) -> int:
         scenario = input("Scenario [ci/interactive/both] (ci): ").strip() or "ci"
     scorer = args.scorer
     if scorer is None and interactive:
-        scorer = input("Scorer URL (empty = rule-only): ").strip() or "none"
+        scorer = input('Scorer URL (empty = rule-only, "ollama" = local GPU recipe): ').strip() or "none"
     scorer = scorer or "none"
 
     policy = load_policy("conservative" if scenario == "ci" else "balanced")
+    if scorer == "ollama":
+        scorer = "http://127.0.0.1:8001"
     if scorer != "none":
         policy.scorer_base_url = scorer
     else:
@@ -686,6 +703,14 @@ def cmd_init(args) -> int:
     if scorer == "none":
         print("  note:      rule-only mode is protective; for semantic judgment see")
         print("             python -m edward.scorer_server --help (works with Ollama/vLLM/llama.cpp)")
+    else:
+        print("  note:      semantic scorer assumed at " + scorer + " — if you answered 'ollama',")
+        print("             bring it up with:")
+        print("               ollama pull qwen3.5:9b")
+        print("               edward-scorer-server --upstream http://127.0.0.1:11434/v1 \\")
+        print("                   --model qwen3.5:9b --port 8001 --style ollama")
+        print(f"               export EDWARD_SCORER_URL={scorer}")
+        print("               edward doctor --probe   # one real scored round-trip")
     return EXIT_OK
 
 
@@ -789,6 +814,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_audit.add_argument("--json", action="store_true", help="Output audit results as JSON")
 
     p_doc = sub.add_parser("doctor", help="environment checks")
+    p_doc.add_argument("--probe", action="store_true",
+                       help="when the scorer is up, also run one real scored round-trip")
     add_common(p_doc)
 
     p_tpl = sub.add_parser("policy-template", help="print a TOML policy template")
