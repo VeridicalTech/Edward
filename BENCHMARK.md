@@ -215,6 +215,31 @@ and terminated the session with a receipt — the intended demo of Edward on
 a real-shaped flow. Reproduction: `python3 tools/bench_rjudge_slice.py`
 (needs `R-Judge` cloned to `/root/Edward-data/rjudge`).
 
+### `--style vllm` — live validation (vLLM 0.31, RTX 3070 Ti)
+
+The vLLM direct readout was validated **live** against vLLM 0.31 serving
+`Qwen/Qwen3-4B-AWQ` (vanilla attention arch): root `POST /tokenize` for the
+option-letter token ids, `POST /v1/completions` with `max_tokens=1`,
+`allowed_token_ids` pinned to the letters, `logprobs=20` returning the
+**raw, unconstrained** next-token distribution (A=-0.004 vs B=-7.13 on a
+clean edit — decisively one-hot-ish, which is what the express gate wants),
+and the constrained single-token follow-up for letters outside the top-k.
+0.06-0.08 s/decision, `allowed_token_ids` verified to constrain only the
+sample while leaving the reported distribution raw. All 5 probe cases
+verdict identically to the Ollama qwen3.5 rows (including the two known
+judge-vs-dataset disagreements).
+
+Honest boundary: this is a **wire-protocol validation** — the scorer path is
+model-agnostic, but Qwen3.5 itself could not run under vLLM on this card.
+vLLM 0.31 ships no GGUF or bitsandbytes loader; FP8/MXFP8 need sm_89+ (the
+3070 Ti is sm_86); compressed-tensors and awq_marlin quantized Qwen3.5 (GDN
+hybrid) both crash with `cudaErrorIllegalAddress` on Ampere; and unquantized
+bf16 weights (8.8 GB) exceed the 7.65 GB usable VRAM. Live vLLM validation
+of qwen3.5 needs an sm_89+/12 GB-class GPU. Also driver-specific: vLLM's
+torch.compile/CUDAGraph path hits the same illegal-access class on this
+open-kernel-driver stack — `--enforce-eager` is required here, which costs
+nothing for a 1-decode-token readout.
+
 ### Pareto intervention selection — neutral result, reported as measured
 
 The JevTree-inspired multi-candidate path (`pareto_intervention=true`: one

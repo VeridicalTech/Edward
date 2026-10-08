@@ -186,15 +186,22 @@ class ScorerServer:
 
     def _letter_token_ids(self, n_options: int) -> dict:
         """Token id per option letter via the upstream /tokenize endpoint
-        (vLLM OpenAI-compatible extension). Needed for allowed_token_ids."""
+        (vLLM OpenAI-compatible extension; lives at the server root in
+        vLLM 0.31, under /v1 in some versions — try both)."""
         ids = {}
         for i in range(n_options):
             letter = chr(65 + i)
-            data = self.post_fn(f"{self.upstream}/tokenize",
-                                {"model": self.model, "prompt": letter,
-                                 "add_special_tokens": False},
-                                {"Content-Type": "application/json"}, 30.0)
-            toks = data.get("tokens") or []
+            data = None
+            for url in (f"{self.ollama_base}/tokenize", f"{self.upstream}/tokenize"):
+                try:
+                    data = self.post_fn(url,
+                                        {"model": self.model, "prompt": letter,
+                                         "add_special_tokens": False},
+                                        {"Content-Type": "application/json"}, 30.0)
+                    break
+                except Exception:
+                    continue
+            toks = (data or {}).get("tokens") or (data or {}).get("token_ids") or []
             if len(toks) == 1:
                 ids[letter] = toks[0]
         return ids
