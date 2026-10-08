@@ -168,7 +168,8 @@ def cmd_wrap(args, cmd) -> int:
                                      max_seconds=args.max_seconds,
                                      is_pi=bool(adapter is not None and adapter.matches(run_cmd)),
                                      done_checker=done_checker,
-                                     feedback_path=getattr(args, "emit_feedback", None))
+                                     feedback_path=getattr(args, "emit_feedback", None),
+                                     adapter_cls=adapter)
         if outcome == EXIT_PAUSED and policy.wait_approval_seconds > 0 \
                 and resumes < MAX_RESUMES and _is_pi_rpc(current_cmd):
             decision = _request_approval(policy, session_id)
@@ -216,7 +217,7 @@ def make_done_checker(cmds):
 
 def _run_under_control(cmd, policy: Policy, scorer, audit: AuditLog, session: str,
                        max_seconds=None, is_pi: bool = False, done_checker=None,
-                       feedback_path: str = None) -> int:
+                       feedback_path: str = None, adapter_cls=None) -> int:
     """Run one child process under the control plane; returns the exit code."""
     plane = ControlPlane(policy, session=session, audit=audit,
                          scorer=scorer, log=log_line, done_checker=done_checker)
@@ -226,7 +227,7 @@ def _run_under_control(cmd, policy: Policy, scorer, audit: AuditLog, session: st
     try:
         if is_pi:
             return _run_pi_rpc(cmd, plane, policy, max_seconds)
-        return _run_generic(cmd, plane, policy, max_seconds)
+        return _run_generic(cmd, plane, policy, max_seconds, adapter_cls=adapter_cls)
     finally:
         if audit:
             try:
@@ -347,7 +348,8 @@ def _run_pi_rpc(cmd, plane: ControlPlane, policy: Policy, max_seconds) -> int:
     return outcome_box["code"]
 
 
-def _run_generic(cmd, plane: ControlPlane, policy: Policy, max_seconds) -> int:
+def _run_generic(cmd, plane: ControlPlane, policy: Policy, max_seconds,
+                 adapter_cls=None) -> int:
     """Universal path: run any command; auto-detect JSONL events, else
     watchdog on wall clock + output inactivity."""
     try:
@@ -399,22 +401,33 @@ def _run_generic(cmd, plane: ControlPlane, policy: Policy, max_seconds) -> int:
                 continue
             print(line, flush=True)
 
-            event = None
-            try:
-                parsed = json.loads(line)
-                if isinstance(parsed, dict) and parsed.get("type"):
-                    event = parsed
+            events = None
+            if adapter_cls is not None and hasattr(adapter_cls, "parse_line"):
+                try:
+                    events = adapter_cls.parse_line(line)
+                except Exception:
+                    events = None
+                if events:
                     saw_json_events = True
-            except json.JSONDecodeError:
-                pass
+            if events is None:
+                events = []
+                try:
+                    parsed = json.loads(line)
+                    if isinstance(parsed, dict) and parsed.get("type"):
+                        events = [parsed]
+                        saw_json_events = True
+                except json.JSONDecodeError:
+                    pass
 
-            if event:
+            for event in events:
                 decision = plane.process_event(event)
                 if decision:
                     code = _handle_decision(plane, decision, killer, "generic")
                     if code is not None:
                         outcome = code
-            elif proc.poll() is not None and lines.empty():
+                        break
+            if outcome is None and not events \
+                    and proc.poll() is not None and lines.empty():
                 outcome = proc.returncode or EXIT_OK
     except KeyboardInterrupt:
         killer.terminate()

@@ -42,7 +42,7 @@ SEMIF_TEMPLATE = ("<|im_start|>system\n{system}<|im_end|>\n"
 
 class ScorerServer:
     def __init__(self, upstream: str, model: str, api_key: str = "",
-                 style: str = "openai"):
+                 style: str = "openai", post_fn=None):
         self.upstream = upstream.rstrip("/")
         self.model = model
         self.api_key = api_key
@@ -50,6 +50,14 @@ class ScorerServer:
         self.request_count = 0
         base = self.upstream[:-3] if self.upstream.endswith("/v1") else self.upstream
         self.ollama_base = base
+        self.post_fn = post_fn or self._post_json
+
+    @staticmethod
+    def _post_json(url, payload, headers, timeout):
+        req = urllib.request.Request(url, data=json.dumps(payload).encode(),
+                                     headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read())
 
     def _chat(self, messages: list, timeout: float) -> str:
         if self.style == "ollama":
@@ -77,6 +85,8 @@ class ScorerServer:
         try:
             if self.style == "ollama":
                 self._score_ollama_direct({}, "Reply ready.", {"OK": "ready"})
+            elif self.style == "vllm":
+                self._score_vllm_direct({}, "Reply ready.", {"OK": "ready"})
             else:
                 self._chat([{"role": "user", "content": "Reply with the single word: ready"}], 30.0)
             return {"ready": True, "model": self.model, "kind": "reference"}
@@ -87,6 +97,8 @@ class ScorerServer:
         self.request_count += 1
         if self.style == "ollama":
             return self._score_ollama_direct(state, question, options)
+        if self.style == "vllm":
+            return self._score_vllm_direct(state, question, options)
         encoded = json.dumps(state, separators=(",", ":"), default=str)
         if len(encoded) > MAX_STATE_CHARS:
             state = encoded[:MAX_STATE_CHARS]
@@ -140,11 +152,8 @@ class ScorerServer:
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
-        req = urllib.request.Request(f"{self.ollama_base}/api/generate",
-                                     data=json.dumps(body).encode(),
-                                     headers=headers, method="POST")
-        with urllib.request.urlopen(req, timeout=120.0) as resp:
-            data = json.loads(resp.read())
+        data = self.post_fn(f"{self.ollama_base}/api/generate", body,
+                            headers, 120.0)
         pos = (data.get("logprobs") or [{}])[0]
         argmax_token = pos.get("token") or ""
         letters = {chr(65 + i): oid for i, oid in enumerate(options) if i < 16}
@@ -171,6 +180,99 @@ class ScorerServer:
                 "prompt_version": "semif-direct-v1",
                 "raw_reply": note[:200],
                 "input_tokens": data.get("prompt_eval_count"),
+                "total_seconds": None,
+                "choice": max(probs, key=probs.get) if probs else
+                          ("UNSURE" if "UNSURE" in options else next(iter(options)))}
+
+    def _letter_token_ids(self, n_options: int) -> dict:
+        """Token id per option letter via the upstream /tokenize endpoint
+        (vLLM OpenAI-compatible extension). Needed for allowed_token_ids."""
+        ids = {}
+        for i in range(n_options):
+            letter = chr(65 + i)
+            data = self.post_fn(f"{self.upstream}/tokenize",
+                                {"model": self.model, "prompt": letter,
+                                 "add_special_tokens": False},
+                                {"Content-Type": "application/json"}, 30.0)
+            toks = data.get("tokens") or []
+            if len(toks) == 1:
+                ids[letter] = toks[0]
+        return ids
+
+    def _score_vllm_direct(self, state, question: str, options: dict) -> dict:
+        """SemIf-style direct readout over vLLM's OpenAI-compatible server.
+
+        One raw /v1/completions call with the ChatML prompt ending at the
+        answer position; allowed_token_ids pins sampling to the option
+        letters, logprobs=20 returns the raw next-token distribution for the
+        softmax. Letters missing from the top-k are fetched with a follow-up
+        request constrained to that single letter (semantic-if's trick) —
+        no flooring needed, every value is raw."""
+        evidence = json.dumps(state, ensure_ascii=False, separators=(", ", ": "),
+                              default=str)[:MAX_STATE_CHARS] if state else "(none)"
+        payload = {"evidence": evidence, "criterion": question,
+                   "options": [{"letter": chr(65 + i), "description": desc}
+                               for i, (oid, desc) in enumerate(options.items())
+                               if i < 16]}
+        user = json.dumps(payload, ensure_ascii=False)
+        prompt = SEMIF_TEMPLATE.format(system=SEMIF_SYSTEM, user=user)
+        letters = {chr(65 + i): oid for i, oid in enumerate(options) if i < 16}
+        token_ids = self._letter_token_ids(len(letters))
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+
+        def completion(allow_ids):
+            body = {"model": self.model, "prompt": prompt, "max_tokens": 1,
+                    "temperature": 0.0, "logprobs": 20, "stream": False,
+                    "allowed_token_ids": allow_ids}
+            data = self.post_fn(f"{self.upstream}/completions", body,
+                                headers, 120.0)
+            choice0 = (data.get("choices") or [{}])[0]
+            lp = choice0.get("logprobs") or {}
+            rows = lp.get("top_logprobs") or []
+            row = rows[0] if rows else {}
+            if isinstance(row, dict) and row:
+                # vLLM completions: {token_str: logprob}
+                return choice0.get("text") or "", dict(row)
+            # OpenAI-style [{"token":..., "logprob":...}]
+            flat = {r.get("token"): r.get("logprob") for r in row
+                    if isinstance(r, dict)}
+            return choice0.get("text") or "", flat
+
+        sampled, row = completion(list(token_ids.values()))
+        found = {}
+        for tok, val in row.items():
+            key = (tok or "").strip()
+            if key in letters and key not in found:
+                found[key] = float(val)
+        # follow-up for letters outside the top-k (constrained single-token)
+        for letter in letters:
+            if letter in found:
+                continue
+            if letter not in token_ids:
+                continue
+            _, lrow = completion([token_ids[letter]])
+            for tok, val in lrow.items():
+                if (tok or "").strip() == letter:
+                    found[letter] = float(val)
+                    break
+        if not found:
+            neutral = "UNSURE" if "UNSURE" in options else next(iter(options))
+            probs = {oid: (1.0 if oid == neutral else 0.0) for oid in options}
+            note = "vllm direct: no option letter in top-k, neutral fallback"
+        else:
+            mx = max(found.values())
+            exps = {L: math.exp(found[L] - mx) for L in found}
+            total = math.fsum(exps.values())
+            probs = {letters[L]: exps[L] / total for L in found}
+            note = (f"vllm direct sampled={sampled.strip()!r} "
+                    + " ".join(f"{L}={found[L]:.3f}" for L in sorted(found)))
+        return {"option_ids": list(options),
+                "probabilities": [probs.get(oid, 0.0) for oid in options],
+                "prompt_version": "semif-direct-v1",
+                "raw_reply": note[:200],
+                "input_tokens": None,
                 "total_seconds": None,
                 "choice": max(probs, key=probs.get) if probs else
                           ("UNSURE" if "UNSURE" in options else next(iter(options)))}
@@ -221,10 +323,11 @@ def main(argv=None):
     ap.add_argument("--api-key", default=os.environ.get("SCORER_UPSTREAM_API_KEY", ""))
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8000)
-    ap.add_argument("--style", choices=("openai", "ollama"), default="openai",
+    ap.add_argument("--style", choices=("openai", "ollama", "vllm"), default="openai",
                     help="openai = generic /v1 chat (default); ollama = native "
-                         "/api/chat with think:false so reasoning models answer "
-                         "in ~0.1s instead of burning a thinking budget")
+                         "/api/chat direct readout (think off); vllm = raw "
+                         "/v1/completions with allowed_token_ids — the strongest "
+                         "direct readout (every probability is a raw logprob)")
     args = ap.parse_args()
     server = ScorerServer(args.upstream, args.model, args.api_key, args.style)
     httpd = ThreadingHTTPServer((args.host, args.port), make_handler(server))

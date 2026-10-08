@@ -3,6 +3,54 @@
 All notable changes to Edward are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versioning is semver.
 
+## [0.4.2] - 2026-10-08
+
+### Added
+- **Native `claude` and `codex` adapters**: `edward wrap --agent claude -- claude -p ...`
+  and `--agent codex` now translate each CLI's JSONL stream (stream-json /
+  exec --json, plus on-disk rollout schema) into canonical control-plane
+  events — tool calls, retries, session lifecycle — verified against live
+  CLI output. A fake-agent E2E shows a `rm -rf` inside a claude stream being
+  intercepted and terminated (exit 76).
+- **`--style vllm` scorer direct readout**: raw `/v1/completions` with
+  `allowed_token_ids` pinned to the option letters and `logprobs=20`;
+  letters outside the top-k are fetched with a constrained follow-up
+  request, so every probability is a raw logprob (strongest local readout).
+- `edward init --scorer ollama`: writes the policy with the local scorer URL
+  and prints the three-command bring-up recipe.
+- `edward doctor --probe`: one real scored round-trip after the health check.
+
+### Fixed
+- `edward doctor --probe` scorer API mismatch (found by a fresh-venv
+  install test).
+- Windows key-file permission test (NTFS has no POSIX bits) — found by
+  widening CI to full test discovery across 3 OSes x Python 3.11-3.13.
+
+## [0.4.1] - 2026-10-07
+
+### Fixed
+- **Contract evidence renderer**: path-only write/edit traces (no diff text
+  recorded) were rendered as `content: ''`, which small models read as a file
+  wipe — a systematic DESTRUCT false-positive class (local bench FPR 40.7%).
+  Now rendered explicitly as "diff content not recorded in trace".
+
+### Changed
+- **`edward-scorer-server --style ollama`**: SemIf-style direct readout
+  (TheoLeeCJ/SemIf direct-options) — raw ChatML with an empty think block,
+  one forward pass, no generated text; the decision distribution is softmaxed
+  from the top-20 option-letter logprobs in float64. ~0.2 s/decision with
+  real calibrated probabilities (was: 30-60 s thinking or fabricated one-hot
+  confidence). The asymmetric-confirm gates now operate on live probability.
+- scorer server max_tokens 2048 -> 4096 on the openai style (thinking models
+  exhausted the budget before emitting content; verdicts were being harvested
+  from truncated reasoning).
+
+### Measured
+- Fully-local holdout rows added to BENCHMARK.md: Ollama qwen3.5:9b direct
+  readout lands within noise of the tuned LAN 4B service (56.5%/19.4% vs
+  58.3%/17.6% recall/FPR); recommended express gate 0.98 gives 44.4% recall
+  at 7.4% FPR, 85.7% precision, EIR3 0.833, ~25 min wall on an RTX 3070 Ti.
+
 ## [0.4.0] - 2026-09-25
 
 ### Added

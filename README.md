@@ -229,9 +229,9 @@ touching the control plane.
 |---|---|---|
 | OS | Linux, macOS, Windows | CI matrix (incl. POSIX killpg + Windows CTRL_BREAK process trees) |
 | Python | 3.11 – 3.13 | CI matrix |
-| agents | **any subprocess** (`edward wrap -- <cmd>`); `pi` gets native RPC; more via `edward.adapters` entry points | `edward demo` |
+| agents | **any subprocess** (`edward wrap -- <cmd>`); builtin `claude` / `codex` / `pi` adapters (native stream translation); more via `edward.adapters` entry points | `edward demo`, adapter test fixtures from live CLI output |
 | scorer backends | `endpoint` (any OpenAI-compatible URL), `jev` (TypeSafe Jev / Kev — same wire API), `heuristic` (offline), `disabled` | `edward doctor` |
-| local scorers | Ollama (`--style ollama`, direct readout), vLLM / llama.cpp / LM Studio (`--style openai`) | BENCHMARK.md local rows |
+| local scorers | Ollama (`--style ollama`), **vLLM (`--style vllm`, `allowed_token_ids` — every probability is a raw logprob)**, llama.cpp / LM Studio (`--style openai`) | BENCHMARK.md local rows |
 | GPU | none required (rule-only + heuristic); 8 GB runs qwen3.5:9b direct readout | RTX 3070 Ti measurements |
 | containers | `deploy/docker-compose.yml` — CPU-only by default, `--profile gpu` adds Ollama + scorer | compose build + containerized `wrap` |
 
