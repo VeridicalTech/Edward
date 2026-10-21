@@ -746,6 +746,18 @@ def cmd_init(args) -> int:
     return EXIT_OK
 
 
+def cmd_replay(args) -> int:
+    from .replay import write_replay
+    audit_path = args.audit or DEFAULT_AUDIT_PATH
+    try:
+        out, sid = write_replay(audit_path, out_path=args.out, session=args.session)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_ERROR
+    print(f"replay written: {out} (session edward-{sid})")
+    return EXIT_OK
+
+
 def cmd_keygen(args) -> int:
     try:
         seed, pub = ensure_key(args.key)
@@ -850,6 +862,15 @@ def build_parser() -> argparse.ArgumentParser:
                        help="when the scorer is up, also run one real scored round-trip")
     add_common(p_doc)
 
+    p_mcp = sub.add_parser("mcp", help="run the control plane as an MCP server (stdio)")
+    p_mcp.add_argument("--policy", default=None, help="policy preset or TOML path")
+    p_mcp.add_argument("--audit", default=None, help="audit log path (default: ~/.edward/audit.jsonl)")
+
+    p_rep = sub.add_parser("replay", help="render one audited session as a self-contained HTML receipt view")
+    p_rep.add_argument("--session", default=None, help="session id (default: most recent)")
+    p_rep.add_argument("--audit", default=None, help="audit log path (default: ~/.edward/audit.jsonl)")
+    p_rep.add_argument("--out", default=None, help="output html path (default: ~/.edward/replay-<sid>.html)")
+
     p_tpl = sub.add_parser("policy-template", help="print a TOML policy template")
     p_tpl.add_argument("--preset", default="balanced", choices=["conservative", "balanced", "aggressive"])
 
@@ -882,6 +903,12 @@ def main(argv=None) -> int:
         return cmd_eval(args)
     if args.command == "audit":
         return cmd_audit(args)
+    if args.command == "replay":
+        return cmd_replay(args)
+    if args.command == "mcp":
+        from .mcp_server import serve as mcp_serve
+        mcp_serve(policy_path=args.policy, audit_path=args.audit)
+        return EXIT_OK
     if args.command == "doctor":
         return cmd_doctor(args)
     if args.command == "policy-template":

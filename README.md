@@ -102,6 +102,10 @@ edward demo --live-scorer --offline  # same proof through the full scorer pipeli
 edward wrap -- pi "fix the flaky test"                     # full monitoring + intervention
 edward wrap --no-scorer -- python my_agent.py              # any command, rule-only
 edward wrap --scope ./src --auto-resume 60 -- pi "task"    # scoped writes, auto-resume
+edward wrap --agent claude -- claude -p "task"             # native claude stream supervision (resumable)
+edward wrap --agent codex  -- codex exec "task"            # native codex stream supervision (resumable)
+edward audit && edward replay                              # aggregates, then the session as a shareable HTML receipt
+edward mcp                                                 # control plane as an MCP server (stdio, in-loop supervision)
 ```
 
 **Local semantic scorer (one GPU, three commands).** Rule-only is protective;
@@ -229,7 +233,7 @@ touching the control plane.
 |---|---|---|
 | OS | Linux, macOS, Windows | CI matrix (incl. POSIX killpg + Windows CTRL_BREAK process trees) |
 | Python | 3.11 – 3.13 | CI matrix |
-| agents | **any subprocess** (`edward wrap -- <cmd>`); builtin `claude` / `codex` / `pi` adapters (native stream translation); more via `edward.adapters` entry points | `edward demo`, adapter test fixtures from live CLI output |
+| agents | **any subprocess** (`edward wrap -- <cmd>`); builtin `claude` / `codex` / `pi` adapters (native stream translation **+ resume parity**: PAUSE -> `--resume`/`exec resume --last` with a supervisor note); MCP agents via `edward mcp`; more via `edward.adapters` entry points | `edward demo`, adapter test fixtures from live CLI output |
 | scorer backends | `endpoint` (any OpenAI-compatible URL), `jev` (TypeSafe Jev / Kev — same wire API), `heuristic` (offline), `disabled` | `edward doctor` |
 | local scorers | Ollama (`--style ollama`), **vLLM (`--style vllm`, `allowed_token_ids` — every probability is a raw logprob)**, llama.cpp / LM Studio (`--style openai`) | BENCHMARK.md local rows |
 | GPU | none required (rule-only + heuristic); 8 GB runs qwen3.5:9b direct readout | RTX 3070 Ti measurements |
