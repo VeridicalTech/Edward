@@ -159,14 +159,28 @@ def cmd_wrap(args, cmd) -> int:
     resumes = 0
     current_cmd = list(cmd)
     outcome = None
+
+    def _feedback_text():
+        path = getattr(args, "emit_feedback", None)
+        if not path or not os.path.exists(path):
+            return ""
+        try:
+            with open(path, encoding="utf-8") as fh:
+                fb = json.load(fh).get("edward_feedback", {})
+            return f"{fb.get('action', '')}: {fb.get('reason', '')}".strip(": ")
+        except (OSError, ValueError):
+            return ""
+
     while True:
         run_cmd = list(current_cmd)
         if adapter is not None and adapter.matches(run_cmd):
-            run_cmd = adapter.build_command(run_cmd, session_id=None if ephemeral else session_id,
-                                            ephemeral=ephemeral)
+            run_cmd = adapter.build_command(
+                run_cmd, session_id=None if ephemeral else session_id,
+                ephemeral=ephemeral, resume=resumes > 0,
+                feedback=_feedback_text() if resumes > 0 else "")
         outcome = _run_under_control(run_cmd, policy, scorer, audit, session_id,
                                      max_seconds=args.max_seconds,
-                                     is_pi=bool(adapter is not None and adapter.matches(run_cmd)),
+                                     is_pi=getattr(adapter, "name", "") == "pi",
                                      done_checker=done_checker,
                                      feedback_path=getattr(args, "emit_feedback", None),
                                      adapter_cls=adapter)
@@ -184,8 +198,13 @@ def cmd_wrap(args, cmd) -> int:
                 break
             log_line("approval timeout — staying paused (exit 75)")
             break
+        def _resume_capable():
+            if _is_pi_rpc(current_cmd):
+                return True
+            return getattr(adapter, "name", "") in ("claude", "codex")
+
         if outcome == EXIT_PAUSED and policy.auto_resume_seconds > 0 \
-                and resumes < MAX_RESUMES and _is_pi_rpc(current_cmd):
+                and resumes < MAX_RESUMES and _resume_capable():
             resumes += 1
             log_line(f"auto-resume {resumes}/{MAX_RESUMES} in {policy.auto_resume_seconds}s "
                      f"(session edward-{session_id})")

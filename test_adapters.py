@@ -100,3 +100,50 @@ class TestCodexAdapter(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TestResumeParity(unittest.TestCase):
+    def test_claude_session_uuid_stable(self):
+        a = ClaudeAdapter.session_uuid("ab12cd34")
+        b = ClaudeAdapter.session_uuid("ab12cd34")
+        self.assertEqual(a, b)
+        self.assertEqual(len(a.split("-")), 5)          # UUID shape (claude demands UUID)
+        self.assertNotEqual(ClaudeAdapter.session_uuid("ffffffff"), a)
+
+    def test_claude_fresh_pins_session(self):
+        out = ClaudeAdapter.build_command(["claude", "-p", "task"], session_id="ab12cd34")
+        self.assertIn("--session-id", out)
+        self.assertIn(ClaudeAdapter.session_uuid("ab12cd34"), out)
+        self.assertNotIn("--resume", out)
+
+    def test_claude_resume_swaps_to_resume_and_augments_prompt(self):
+        out = ClaudeAdapter.build_command(["claude", "-p", "task"], session_id="ab12cd34",
+                                          resume=True, feedback="PAUSE: inactivity stall")
+        self.assertNotIn("--session-id", out)
+        self.assertIn("--resume", out)
+        self.assertIn(ClaudeAdapter.session_uuid("ab12cd34"), out)
+        prompt = out[out.index("-p") + 1]
+        self.assertTrue(prompt.startswith("task\n\n[edward supervisor]"))
+        self.assertIn("PAUSE: inactivity stall", prompt)
+
+    def test_codex_resume_form(self):
+        out = CodexAdapter.build_command(["codex", "exec", "--json", "do it"],
+                                         session_id="ab12cd34", resume=True,
+                                         feedback="PAUSE: budget bleed")
+        self.assertEqual(out[1:4], ["exec", "resume", "--last"])
+        self.assertIn("--json", out)
+        joined = " ".join(out)
+        self.assertIn("[edward supervisor]", joined)
+        self.assertIn("budget bleed", joined)
+        self.assertIn("do it", joined)
+
+    def test_pi_generic_accept_kwargs(self):
+        from edward.adapters import PiAdapter, GenericAdapter
+        self.assertEqual(GenericAdapter.build_command(["x"], resume=True, feedback="f"),
+                         ["x"])
+        base = PiAdapter.build_command(["pi", "task"], session_id="s", resume=True)
+        self.assertIn("--session-id", base)
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

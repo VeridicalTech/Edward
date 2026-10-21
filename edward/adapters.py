@@ -19,6 +19,7 @@ picks `pi` when the command looks like pi, else generic.
 import json
 import os
 import shutil
+import uuid
 from typing import Optional
 
 
@@ -72,7 +73,8 @@ class PiAdapter:
         return _is_pi_rpc(cmd)
 
     @staticmethod
-    def build_command(cmd, session_id=None, ephemeral=False) -> list:
+    def build_command(cmd, session_id=None, ephemeral=False,
+                      resume=False, feedback="") -> list:
         return build_pi_command(cmd, session_id=session_id, ephemeral=ephemeral)
 
     @staticmethod
@@ -92,7 +94,8 @@ class GenericAdapter:
         return True
 
     @staticmethod
-    def build_command(cmd, session_id=None, ephemeral=False) -> list:
+    def build_command(cmd, session_id=None, ephemeral=False,
+                      resume=False, feedback="") -> list:
         return list(cmd)
 
     @staticmethod
@@ -126,8 +129,21 @@ def _canon_tool_event(tool, args, is_error=False):
             "args": args or {}, "isError": bool(is_error)}
 
 
+def _supervisor_note(feedback: str) -> str:
+    note = ("[edward supervisor] This session was paused by the external "
+            "control plane")
+    if feedback:
+        note += f": {feedback}"
+    return (note + ". Fix the reported condition, then continue the task "
+            "without repeating the paused step.")
+
+
 class ClaudeAdapter:
-    """claude -p --output-format stream-json --verbose supervision."""
+    """claude -p --output-format stream-json --verbose supervision.
+
+    Resume parity: new sessions get a deterministic UUID (--session-id) so
+    `edward wrap --continue` can resume the exact conversation via
+    `--resume <uuid>` with a supervisor note appended to the prompt."""
 
     name = "claude"
 
@@ -140,9 +156,12 @@ class ClaudeAdapter:
         return bool(cmd) and os.path.basename(cmd[0]) == "claude"
 
     @staticmethod
-    def build_command(cmd, session_id=None, ephemeral=False) -> list:
-        # claude's --session-id demands a real UUID; edward session ids are
-        # not, so sessions are not pinned here (each run is its own session).
+    def session_uuid(session_id: str) -> str:
+        return str(uuid.uuid5(uuid.NAMESPACE_URL, f"edward-{session_id}"))
+
+    @staticmethod
+    def build_command(cmd, session_id=None, ephemeral=False,
+                      resume=False, feedback="") -> list:
         out = list(cmd)
         if "-p" not in out:
             for i, a in enumerate(out[1:], 1):
@@ -153,6 +172,22 @@ class ClaudeAdapter:
             out += ["--output-format", "stream-json"]
         if "--verbose" not in out:
             out += ["--verbose"]  # stream-json refuses to work without it
+        suid = ClaudeAdapter.session_uuid(session_id) if session_id else None
+        if resume and suid:
+            if "--session-id" in out:
+                i = out.index("--session-id")
+                out[i] = "--resume"
+                out[i + 1] = suid
+            elif "--resume" not in out:
+                i = out.index("-p")
+                out[i:i] = ["--resume", suid]
+            for j, a in enumerate(out):
+                if a == "-p" and j + 1 < len(out):
+                    out[j + 1] = f"{out[j + 1]}\n\n{_supervisor_note(feedback)}"
+                    break
+        elif suid and "--session-id" not in out and "--resume" not in out:
+            out.insert(out.index("-p"), "--session-id")
+            out.insert(out.index("--session-id") + 1, suid)
         return out
 
     @staticmethod
@@ -197,7 +232,12 @@ class ClaudeAdapter:
 
 
 class CodexAdapter:
-    """codex exec --json supervision (live stream + on-disk rollouts)."""
+    """codex exec --json supervision (live stream + on-disk rollouts).
+
+    Resume parity: `codex exec resume --last` continues the most recent
+    recorded thread with a supervisor note appended to the prompt. Caveat:
+    --last assumes the paused codex session is the most recent one (codex
+    assigns thread ids server-side; there is no pin-at-create flag)."""
 
     name = "codex"
 
@@ -210,12 +250,27 @@ class CodexAdapter:
         return bool(cmd) and os.path.basename(cmd[0]) == "codex"
 
     @staticmethod
-    def build_command(cmd, session_id=None, ephemeral=False) -> list:
+    def build_command(cmd, session_id=None, ephemeral=False,
+                      resume=False, feedback="") -> list:
         out = list(cmd)
         if len(out) > 1 and out[1] not in ("exec", "resume"):
             out.insert(1, "exec")
         if "exec" in out[1:2] and "--json" not in out:
             out.insert(2, "--json")
+        if resume:
+            if "resume" not in out[2:3]:
+                out.insert(2, "resume")
+            if "--last" not in out:
+                out.insert(3, "--last")
+            note = _supervisor_note(feedback)
+            prompt_idx = max((i for i, a in enumerate(out)
+                              if not a.startswith("-") and a != "resume"
+                              and i >= 2 and a != "--json" and a != "--last"),
+                             default=None)
+            if prompt_idx is not None:
+                out[prompt_idx] = f"{out[prompt_idx]}\n\n{note}"
+            else:
+                out.append(note)
         return out
 
     @staticmethod
