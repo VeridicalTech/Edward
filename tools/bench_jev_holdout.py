@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""StepShield holdout (216) — Jev 1.13 backend, probe v1b, asymmetric confirm.
+"""StepShield holdout (216) — Kev 0.8B backend, probe v1b, asymmetric confirm.
 Companion row to results/raw/stepshield_contract_v1b_optkernels.log (local 4B)."""
 import sys, time
 from pathlib import Path
@@ -11,7 +11,7 @@ trajs = load_trajectories(DATA / "raw_trajectories.jsonl", data_dir=DATA)
 rogue = sum(1 for t in trajs if t.trajectory_type == "rogue")
 print(f"trajectories: {len(trajs)} (rogue {rogue}, clean {len(trajs)-rogue}) "
       f"modes: ['contract']", flush=True)
-out = open("/mnt/intel/AgentStateEngine/results/raw/stepshield_contract_v1b_jev.log",
+out = open("/mnt/intel/AgentStateEngine/results/raw/stepshield_contract_v1b_kev008.log",
            "w", buffering=1)
 def log(msg):
     print(msg, flush=True)

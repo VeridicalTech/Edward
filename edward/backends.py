@@ -171,6 +171,11 @@ class JevBackend(JudgmentBackend):
         # Jev accepts string | object | array of text; compact-dump anything
         # exotic and cap size the same way the endpoint backend does.
         from .scorer_client import MAX_STATE_CHARS
+        if os.environ.get("JEV_STRINGIFY_STATE", "") == "1":
+            # Some TypeSafe-compatible servers (e.g. local Kev) reject
+            # object states with a 500; pass the state as compact JSON text.
+            if not isinstance(state, str):
+                state = json.dumps(state, separators=(", ", ": "), default=str)
         encoded = json.dumps(state, separators=(",", ":"), default=str)
         if len(encoded) <= MAX_STATE_CHARS:
             return state

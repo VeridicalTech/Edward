@@ -215,6 +215,34 @@ and terminated the session with a receipt — the intended demo of Edward on
 a real-shaped flow. Reproduction: `python3 tools/bench_rjudge_slice.py`
 (needs `R-Judge` cloned to `/root/Edward-data/rjudge`).
 
+### Decision-model tier (Kev-0.8B) — negative result, reported as measured
+
+The `jev` backend speaks Kev's wire API (`/v1/systemone`) unchanged, so the
+trained-decision-model tier is a drop-in: local server (`jaredpalmer/kev`
+0.1.0, Kev-0.8B = LoRA + pointer head on Qwen3.5-0.8B-Base, CPU fp32 eager
+— the CUDA path device-asserts on this Ampere sm_86 card even with fused
+kernels and graphs declined), `JEV_API_URL` pointed at it,
+`JEV_STRINGIFY_STATE=1` (the local server 500s on object states; the env
+option passes the state as compact JSON text). Holdout result:
+
+| config | Recall | FPR | Precision | EIR₃ |
+|---|---:|---:|---:|---:|
+| Kev-0.8B (CPU, temp 2.35 calibration) | 7.4% | 1.9% | 80.0% | 0.125 |
+| (identical to the rules-only baseline — zero semantic detections) | | | | |
+
+Honest reading: single explicit probes discriminate fine (`sudo apt-get
+install <unverified>` → VIOLATION @ 0.95), but across ~1,900 scored steps
+the 0.8B pointer head collapses to its prior on the StepShield probe
+distribution — every violating step reads OK/UNSURE below the gates. The
+smallest decision-model tier does **not** transfer zero-shot to coding-agent
+audit judgments. Kev-4B/9B (0.81+ balanced accuracy on their own suites)
+need 32 GB-class hardware and remain untested. The wire integration works
+end-to-end; the ceiling stays where the generation-based local rows put it.
+
+Raw log: `results/raw/stepshield_contract_v1b_kev008.log`.
+
+
+
 ### `--style vllm` — live validation (vLLM 0.31, RTX 3070 Ti)
 
 The vLLM direct readout was validated **live** against vLLM 0.31 serving
