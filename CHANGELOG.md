@@ -3,6 +3,44 @@
 All notable changes to Edward are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versioning is semver.
 
+## [0.5.0] - 2026-10-09
+
+### Added
+- **`edward mcp`**: the control plane as a zero-dependency MCP server
+  (stdio JSON-RPC). `report_event` gives any MCP agent in-loop supervision
+  (deterministic decisions per tool execution); `judge_action` adds an
+  advisory semantic verdict; `get_state` exposes the MSS snapshot.
+- **`edward replay`**: render one audited session as a self-contained HTML
+  receipt page — command, timeline, interventions (trigger / source /
+  scorer verdict / MSS / estimated avoided spend), signed-trail note.
+- **Resume parity for the `claude` and `codex` adapters**: sessions pinned
+  with a deterministic UUID (`--session-id`), PAUSE auto-resumes via
+  `--resume <uuid>` / `codex exec resume --last` with a supervisor note
+  (incl. the `--emit-feedback` reason) appended to the continuation prompt.
+- **`--style vllm` scorer direct readout**: raw `/v1/completions` with
+  `allowed_token_ids` pinned to the option letters; letters outside the
+  top-k fetched by constrained follow-up — every probability is a raw
+  logprob. Live-validated against vLLM 0.31 (qwen3-4b AWQ, 0.07s/decision).
+- **`edward init --scorer ollama`** and **`edward doctor --probe`** (one
+  real scored round-trip).
+- **`JEV_STRINGIFY_STATE=1`** for TypeSafe-compatible servers that reject
+  object states (local Kev).
+
+### Fixed
+- claude/codex adapters were misrouted into the pi RPC path (is_pi keyed on
+  `matches()`); keyed on adapter name — found by a fake-agent E2E.
+- Contract evidence renderer fabricated `content: ''` for path-only edit
+  traces (v0.4.1); scorer openai-style token budget raised for thinking
+  models (v0.4.1).
+
+### Measured
+- Fully-local holdout ladder (Ollama direct readout): 9b within noise of the
+  tuned LAN service; express gate 0.98 = recommended operating point.
+- Kev-0.8B decision-model tier: wire integration works end-to-end; the 0.8B
+  head collapses to prior on the coding-audit probe distribution (negative
+  result, reported as measured). 56 real agent sessions (2,663 tool steps)
+  replayed: zero semantic false alarms on real work.
+
 ## [0.4.2] - 2026-10-08
 
 ### Added
