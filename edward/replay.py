@@ -115,7 +115,11 @@ def render(audit_path, session=None, receipts_path=None):
             f"<span class='v'>{html.escape(str(audit_path))}</span> · "
             f"{len(rows)} records · signed trail: <span class='v'>edward verify</span>"
             + (f" · receipts: <span class='v'>{html.escape(str(receipts_path))}</span>"
-               if receipts_path else "") + "</div></body></html>")
+               if receipts_path else "")
+            + "<br>next: <span class='v'>edward wrap -- &lt;your agent&gt;</span> to "
+            "supervise a run, then <span class='v'>edward replay</span> again — "
+            "this page is a single file, safe to attach to a review or an issue."
+            "</div></body></html>")
     out.append(foot)
     return "\n".join(out), sid
 

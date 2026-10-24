@@ -3,6 +3,21 @@
 All notable changes to Edward are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versioning is semver.
 
+## [0.5.1] - 2026-10-09
+
+### Changed
+- **Adoption-path polish (validation round)**: `edward demo` now ends with
+  explicit next steps (wrap a real agent / replay the receipt / doctor
+  --probe); the replay HTML footer points to the next action and notes the
+  page is a single file safe to attach to a review. README opens with an
+  explicit *what it is / what it is not* boundary (process, not logic; no
+  sandbox, no catch-everything guarantee) and links the failed experiments.
+- New: `docs/validation-playbook.md` — the two-week user-validation campaign
+  (screening scorecard, 15 behavioral interview questions, alternative-solution
+  comparison, a 15-minute hands-on test script with time-to-first-run and
+  comprehension metrics, the data table, and explicit continue/adjust/pivot
+  gates).
+
 ## [0.5.0] - 2026-10-09
 
 ### Added

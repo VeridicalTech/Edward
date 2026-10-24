@@ -60,4 +60,8 @@ def run_demo(n_trials: int = 3, policy_source: str = None, use_scorer: bool = Fa
 
     print(f"\n{'PASS' if ok else 'FAIL'} in {time.time()-t0:.1f}s "
           f"(deterministic rules frozen defaults; scorer {'live' if scorer else 'off'})")
+    print("\nnext steps:")
+    print("  edward wrap -- pi \"fix the flaky test\"      # supervise a real agent run")
+    print("  edward replay                                # after a run: the session as an HTML receipt")
+    print("  edward doctor --probe                        # verify the semantic scorer end-to-end")
     return 0 if ok else 1
